@@ -1,0 +1,582 @@
+/* ============================================================
+   Pay Me Back or Else — Complete Theme
+   ============================================================ */
+
+/* --- CSS Custom Properties --- */
+:root {
+    --ink-black: #1A1A1A;
+    --paper-cream: #FDF6E3;
+    --pencil-gray: #6B6B6B;
+    --eraser-pink: #F5E6E0;
+    --money-green: #2D6A4F;
+    --money-green-light: #D8F3DC;
+    --angry-red: #D32F2F;
+    --angry-red-light: #FFCDD2;
+    --caution-amber: #F9A825;
+    --white: #FFFFFF;
+
+    --font-display: 'Permanent Marker', cursive;
+    --font-body: 'Special Elite', cursive;
+    --font-ui: 'Patrick Hand', cursive;
+    --font-input: 'Caveat', cursive;
+}
+
+/* --- Hide Streamlit Defaults --- */
+#MainMenu {visibility: hidden;}
+header {visibility: hidden !important;}
+footer {visibility: hidden !important;}
+.stDeployButton {display: none !important;}
+div[data-testid="stToolbar"] {display: none !important;}
+div[data-testid="stDecoration"] {display: none !important;}
+div[data-testid="stStatusWidget"] {display: none !important;}
+
+/* --- Page Background --- */
+.stApp {
+    background-color: var(--paper-cream) !important;
+}
+
+/* --- Max Content Width --- */
+.block-container {
+    max-width: 680px !important;
+    padding-left: 1.5rem !important;
+    padding-right: 1.5rem !important;
+}
+
+/* --- Typography --- */
+h1, .page-title {
+    font-family: var(--font-display) !important;
+    font-size: 2.4rem !important;
+    line-height: 1.2 !important;
+    color: var(--ink-black) !important;
+}
+
+h2 {
+    font-family: var(--font-display) !important;
+    font-size: 1.6rem !important;
+    line-height: 1.3 !important;
+    color: var(--ink-black) !important;
+}
+
+p, .page-subtitle {
+    font-family: var(--font-body) !important;
+    font-size: 1.1rem !important;
+    line-height: 1.7 !important;
+    color: var(--ink-black) !important;
+}
+
+/* --- Form Labels --- */
+.stTextInput label,
+.stNumberInput label,
+.stTextArea label,
+.stSelectbox label,
+.stSlider label {
+    font-family: var(--font-body) !important;
+    color: var(--ink-black) !important;
+    font-size: 1rem !important;
+}
+
+/* --- Input Fields --- */
+.stTextInput input,
+.stNumberInput input,
+.stTextArea textarea {
+    font-family: var(--font-input) !important;
+    font-size: 1.1rem !important;
+    font-weight: 500 !important;
+    background-color: var(--eraser-pink) !important;
+    border: 1px solid #D0D0D0 !important;
+    border-radius: 4px !important;
+    color: var(--ink-black) !important;
+    transition: border-color 0.3s ease !important;
+}
+
+.stTextInput input:focus,
+.stNumberInput input:focus,
+.stTextArea textarea:focus {
+    border-color: var(--money-green) !important;
+    box-shadow: none !important;
+}
+
+.stSelectbox > div > div {
+    font-family: var(--font-input) !important;
+    font-size: 1.1rem !important;
+    background-color: var(--eraser-pink) !important;
+    border: 1px solid #D0D0D0 !important;
+    border-radius: 4px !important;
+}
+
+/* --- Rage Level Classes --- */
+.rage-1 {
+    --current-accent: var(--money-green);
+    --current-bg-tint: var(--paper-cream);
+    --current-border: 1px solid #C8C8C8;
+    transition: all 0.4s ease;
+}
+
+.rage-2 {
+    --current-accent: var(--caution-amber);
+    --current-bg-tint: #FFF8E1;
+    --current-border: 1px dashed #F9A825;
+    transition: all 0.4s ease;
+}
+
+.rage-3 {
+    --current-accent: #E65100;
+    --current-bg-tint: #FFF3E0;
+    --current-border: 2px solid #E65100;
+    transition: all 0.4s ease;
+}
+
+.rage-4 {
+    --current-accent: var(--angry-red);
+    --current-bg-tint: #FFF0F0;
+    --current-border: 3px solid var(--angry-red);
+    transition: all 0.4s ease;
+}
+
+/* Rage-level focus border overrides */
+.rage-2 .stTextInput input:focus,
+.rage-2 .stNumberInput input:focus,
+.rage-2 .stTextArea textarea:focus {
+    border-color: var(--caution-amber) !important;
+}
+
+.rage-3 .stTextInput input:focus,
+.rage-3 .stNumberInput input:focus,
+.rage-3 .stTextArea textarea:focus {
+    border-color: #E65100 !important;
+}
+
+.rage-4 .stTextInput input:focus,
+.rage-4 .stNumberInput input:focus,
+.rage-4 .stTextArea textarea:focus {
+    border-color: var(--angry-red) !important;
+}
+
+/* --- Card Container --- */
+.card {
+    background: var(--white);
+    border-radius: 6px;
+    padding: 1.5rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    margin-bottom: 1.5rem;
+}
+
+.rage-1 .card { border: 1px solid #C8C8C8; }
+.rage-2 .card { border: 1px dashed #F9A825; }
+.rage-3 .card { border: 2px solid #E65100; }
+.rage-4 .card {
+    border: 3px solid var(--angry-red);
+    box-shadow: 0 0 12px rgba(211, 47, 47, 0.15);
+}
+
+/* --- Rage Label --- */
+.rage-label {
+    font-size: 1.4rem !important;
+    margin-bottom: 0 !important;
+    padding-bottom: 0 !important;
+}
+
+.rage-description {
+    font-family: var(--font-ui) !important;
+    color: var(--pencil-gray) !important;
+    font-size: 0.95rem !important;
+    margin-top: 0 !important;
+}
+
+/* --- Navigation Bar --- */
+.nav-bar {
+    display: flex;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0 1rem 0;
+    border-bottom: 1px solid #E0E0E0;
+    margin-bottom: 1.5rem;
+}
+
+.nav-tab {
+    font-family: var(--font-ui);
+    font-size: 1.1rem;
+    padding: 0.5rem 1.2rem;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    color: var(--pencil-gray);
+    border-bottom: 3px solid transparent;
+    transition: all 0.2s ease;
+}
+
+.nav-tab-active {
+    color: var(--ink-black) !important;
+    border-bottom: 3px solid var(--money-green) !important;
+}
+
+.nav-tab-inactive {
+    color: var(--pencil-gray);
+}
+
+.nav-tab:hover {
+    color: var(--ink-black);
+}
+
+/* Hide the HTML nav bar (decorative) — use Streamlit buttons for navigation */
+.nav-bar {
+    display: none;
+}
+
+/* Style the Streamlit nav buttons */
+div[data-testid="stHorizontalBlock"]:first-of-type button {
+    font-family: var(--font-ui) !important;
+    background: transparent !important;
+    color: var(--pencil-gray) !important;
+    border: none !important;
+    border-bottom: 3px solid transparent !important;
+    border-radius: 0 !important;
+    padding: 0.5rem 0 !important;
+    font-size: 1rem !important;
+}
+
+/* --- Buttons --- */
+.stButton > button {
+    font-family: var(--font-ui) !important;
+    font-size: 1.0rem !important;
+    line-height: 1.4 !important;
+    border-radius: 4px !important;
+    transition: transform 0.15s ease, background-color 0.3s ease !important;
+    cursor: pointer !important;
+}
+
+.stButton > button:hover {
+    transform: scale(1.02) !important;
+}
+
+.stButton > button:disabled {
+    opacity: 0.5 !important;
+    transform: none !important;
+}
+
+/* Submit button — the last full-width button */
+.stButton > button[kind="secondary"] {
+    background-color: var(--ink-black) !important;
+    color: var(--white) !important;
+    font-family: var(--font-display) !important;
+    border: none !important;
+}
+
+/* Rage-level submit button colors */
+.rage-1 .stButton > button[data-testid="stBaseButton-secondary"]:last-of-type {
+    background-color: var(--money-green) !important;
+}
+
+.rage-2 .stButton > button[data-testid="stBaseButton-secondary"]:last-of-type {
+    background-color: var(--caution-amber) !important;
+}
+
+.rage-3 .stButton > button[data-testid="stBaseButton-secondary"]:last-of-type {
+    background-color: #E65100 !important;
+}
+
+.rage-4 .stButton > button[data-testid="stBaseButton-secondary"]:last-of-type {
+    background-color: var(--angry-red) !important;
+}
+
+/* --- Slider Track Override --- */
+.stSlider > div > div > div > div {
+    background: linear-gradient(to right,
+        #2D6A4F 0%,
+        #F9A825 33%,
+        #E65100 66%,
+        #D32F2F 100%
+    ) !important;
+}
+
+/* Slider thumb */
+.stSlider > div > div > div > div > div {
+    background-color: var(--white) !important;
+    border: 2px solid var(--ink-black) !important;
+    width: 24px !important;
+    height: 24px !important;
+    border-radius: 50% !important;
+}
+
+/* --- Letter Box --- */
+.letter-box {
+    background-color: var(--paper-cream);
+    padding: 2rem;
+    border-radius: 0 0 6px 6px;
+    max-height: 500px;
+    overflow-y: auto;
+    position: relative;
+    margin-bottom: 1.5rem;
+    border: 1px solid #C8C8C8;
+    /* Torn paper top edge */
+    clip-path: polygon(
+        0% 4%, 2% 0%, 5% 3%, 8% 1%, 11% 4%, 14% 0%, 17% 3%, 20% 1%,
+        23% 4%, 26% 0%, 29% 3%, 32% 1%, 35% 3%, 38% 0%, 41% 4%, 44% 1%,
+        47% 3%, 50% 0%, 53% 3%, 56% 1%, 59% 4%, 62% 0%, 65% 3%, 68% 1%,
+        71% 4%, 74% 0%, 77% 3%, 80% 1%, 83% 4%, 86% 0%, 89% 3%, 92% 1%,
+        95% 3%, 98% 0%, 100% 4%, 100% 100%, 0% 100%
+    );
+    padding-top: 2.5rem;
+    /* Notebook ruled lines */
+    background-image: repeating-linear-gradient(
+        transparent,
+        transparent 1.6rem,
+        #E8E0D0 1.6rem,
+        #E8E0D0 1.65rem
+    );
+    background-color: var(--paper-cream);
+}
+
+.letter-text {
+    font-family: var(--font-body);
+    font-size: 1.1rem;
+    line-height: 1.7;
+    color: var(--ink-black);
+}
+
+.letter-text p {
+    margin-bottom: 1rem;
+}
+
+/* Rage level letter box variants */
+.rage-2-letter {
+    border: 1px dashed #F9A825;
+}
+
+.rage-3-letter {
+    border: 2px solid #E65100;
+}
+
+.rage-4-letter {
+    border: 3px solid var(--angry-red);
+    box-shadow: 0 0 12px rgba(211, 47, 47, 0.15);
+    animation: shake 0.3s ease 1, pulse-border 2s infinite;
+}
+
+.rage-4-letter .letter-text {
+    font-family: var(--font-display) !important;
+    color: #8B0000 !important;
+}
+
+/* Letter fade-in animation */
+.letter-box {
+    animation: fadeSlideUp 0.5s ease-out;
+}
+
+/* --- Action Buttons (Results Page) --- */
+.email-btn {
+    display: inline-block;
+    font-family: var(--font-ui);
+    font-size: 1rem;
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    text-decoration: none;
+    color: var(--white) !important;
+    background-color: var(--money-green);
+    text-align: center;
+    width: 100%;
+    box-sizing: border-box;
+    transition: transform 0.15s ease;
+}
+
+.email-btn:hover {
+    transform: scale(1.02);
+    opacity: 0.9;
+}
+
+.rage-2 .email-btn { background-color: var(--caution-amber); }
+.rage-3 .email-btn { background-color: #E65100; }
+.rage-4 .email-btn { background-color: var(--angry-red); }
+
+/* --- History Page --- */
+.history-card {
+    background: var(--white);
+    border-radius: 6px;
+    padding: 1rem 1.5rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    border: 1px solid #E0E0E0;
+    margin-bottom: 0.75rem;
+}
+
+.history-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+}
+
+.history-debtor {
+    font-family: var(--font-body);
+    font-weight: bold;
+    font-size: 1.2rem;
+    color: var(--ink-black);
+}
+
+.rage-badge {
+    font-family: var(--font-ui);
+    font-size: 0.75rem;
+    color: var(--white);
+    padding: 2px 10px;
+    border-radius: 999px;
+    display: inline-block;
+}
+
+.history-meta {
+    display: flex;
+    gap: 1.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.history-amount {
+    font-family: var(--font-display);
+    font-size: 1rem;
+    color: var(--ink-black);
+}
+
+.history-date {
+    font-family: var(--font-ui);
+    font-size: 0.85rem;
+    color: var(--pencil-gray);
+}
+
+.history-preview {
+    font-family: var(--font-body);
+    font-size: 0.95rem;
+    color: var(--pencil-gray);
+    margin: 0;
+}
+
+.history-letter-full {
+    font-family: var(--font-body);
+    font-size: 1rem;
+    line-height: 1.7;
+    color: var(--ink-black);
+    white-space: pre-wrap;
+}
+
+/* --- Empty State --- */
+.empty-state {
+    text-align: center;
+    padding: 3rem 1rem;
+}
+
+.empty-text {
+    font-family: var(--font-ui) !important;
+    font-size: 1.2rem !important;
+    color: var(--pencil-gray) !important;
+    margin-top: 1rem !important;
+}
+
+/* --- Mascot --- */
+.mascot-container {
+    text-align: center;
+    max-width: 120px;
+    margin: 0 auto;
+}
+
+.mascot-container svg {
+    width: 120px;
+    height: 120px;
+}
+
+.mascot-centered {
+    max-width: 150px;
+    margin: 0 auto 1rem auto;
+}
+
+/* --- Expander Override --- */
+.streamlit-expanderHeader {
+    font-family: var(--font-ui) !important;
+    color: var(--ink-black) !important;
+    background-color: var(--eraser-pink) !important;
+    border-radius: 4px !important;
+}
+
+/* --- Animations --- */
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    20% { transform: translateX(-3px); }
+    40% { transform: translateX(3px); }
+    60% { transform: translateX(-2px); }
+    80% { transform: translateX(2px); }
+}
+
+@keyframes pulse-border {
+    0%, 100% {
+        box-shadow: 0 0 12px rgba(211, 47, 47, 0.15);
+    }
+    50% {
+        box-shadow: 0 0 20px rgba(211, 47, 47, 0.3);
+    }
+}
+
+@keyframes fadeSlideUp {
+    0% {
+        opacity: 0;
+        transform: translateY(15px);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Page transition */
+.stApp > div {
+    animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+    0% { opacity: 0; }
+    100% { opacity: 1; }
+}
+
+/* --- Scrollbar in Letter Box --- */
+.letter-box::-webkit-scrollbar {
+    width: 6px;
+}
+
+.letter-box::-webkit-scrollbar-track {
+    background: var(--eraser-pink);
+    border-radius: 3px;
+}
+
+.letter-box::-webkit-scrollbar-thumb {
+    background: #C8C8C8;
+    border-radius: 3px;
+}
+
+/* --- Responsive: stack action buttons vertically below 600px --- */
+@media (max-width: 600px) {
+    .stHorizontalBlock {
+        flex-direction: column !important;
+    }
+
+    .stHorizontalBlock > div {
+        width: 100% !important;
+    }
+}
+
+/* --- Remove all Streamlit blue remnants --- */
+.stButton > button:focus {
+    box-shadow: none !important;
+    border-color: var(--ink-black) !important;
+}
+
+a {
+    color: var(--money-green) !important;
+}
+
+/* Success/info messages — keep functional but re-font */
+.stAlert {
+    font-family: var(--font-ui) !important;
+}
+
+/* Spinner color */
+.stSpinner > div > div {
+    border-top-color: var(--money-green) !important;
+}
+
+.rage-2 .stSpinner > div > div { border-top-color: var(--caution-amber) !important; }
+.rage-3 .stSpinner > div > div { border-top-color: #E65100 !important; }
+.rage-4 .stSpinner > div > div { border-top-color: var(--angry-red) !important; }
