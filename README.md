@@ -11,18 +11,22 @@ done-ness: from a polite nudge to full unhinged courtroom drama.
 
 ## Features
 
-- Simple input form: debtor name, amount, time owed, relationship type
-- Rage level slider (1–4) with live tone preview
+- Simple input form: debtor name, amount, time owed, relationship type, optional context and Venmo/Zelle handle
+- Rage level slider (1–4) with live tone preview and dynamic submit button labels
 - AI-generated letter via Claude API — personal, funny, and actually sendable
 - Regenerate button for a fresh version
-- One-click copy
-- Letter history with save and delete
+- One-click copy to clipboard
+- Send via email (mailto link with letter pre-filled)
+- Letter history with save, expand, and delete (with confirmation)
+- Capybara mascot (Capy) that reacts to your rage level
+- Hand-drawn illustrated UI theme with rage-level color shifting
 
 
 ## Tech Stack
 
 - Python + Streamlit
 - Claude API (Anthropic)
+- SQLite (planned — currently using session state for history)
 
 
 ## Developer
@@ -55,10 +59,7 @@ done-ness: from a polite nudge to full unhinged courtroom drama.
 git clone https://github.com/lisa2001115/TECHIN514_Final_Pay-Me-Back-or-Else.git
 cd TECHIN514_Final_Pay-Me-Back-or-Else
 pip install -r requirements.txt
+cp .env.example .env
+# Edit .env and add your Anthropic API key
 streamlit run app.py
-```
-
-Add your Claude API key to `.streamlit/secrets.toml`:
-```toml
-ANTHROPIC_API_KEY = "your-key-here"
 ```

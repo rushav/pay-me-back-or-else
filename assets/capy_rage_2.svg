@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
+  <!-- Capy Rage 2: Side-eye, raised eyebrow, tapping quill -->
+  <!-- Body -->
+  <ellipse cx="60" cy="75" rx="35" ry="28" fill="#C4A882" stroke="#1A1A1A" stroke-width="2.5"/>
+  <!-- Belly -->
+  <ellipse cx="60" cy="80" rx="22" ry="18" fill="#FAF3E8"/>
+  <!-- Head -->
+  <ellipse cx="60" cy="42" rx="25" ry="22" fill="#C4A882" stroke="#1A1A1A" stroke-width="2.5"/>
+  <!-- Ears -->
+  <ellipse cx="42" cy="26" rx="8" ry="6" fill="#C4A882" stroke="#1A1A1A" stroke-width="2"/>
+  <ellipse cx="42" cy="26" rx="5" ry="3.5" fill="#F5C6C6"/>
+  <ellipse cx="78" cy="26" rx="8" ry="6" fill="#C4A882" stroke="#1A1A1A" stroke-width="2"/>
+  <ellipse cx="78" cy="26" rx="5" ry="3.5" fill="#F5C6C6"/>
+  <!-- Eyes - side-eye (looking right) -->
+  <circle cx="52" cy="40" r="3.5" fill="#1A1A1A"/>
+  <circle cx="72" cy="40" r="3.5" fill="#1A1A1A"/>
+  <!-- Pupils shifted right for side-eye -->
+  <circle cx="54" cy="40" r="1.5" fill="#FFFFFF"/>
+  <circle cx="74" cy="40" r="1.5" fill="#FFFFFF"/>
+  <!-- Raised left eyebrow -->
+  <line x1="44" y1="32" x2="56" y2="34" stroke="#1A1A1A" stroke-width="2.5" stroke-linecap="round"/>
+  <!-- Normal right eyebrow -->
+  <line x1="64" y1="34" x2="76" y2="33" stroke="#1A1A1A" stroke-width="2" stroke-linecap="round"/>
+  <!-- Nose -->
+  <ellipse cx="60" cy="48" rx="4" ry="2.5" fill="#1A1A1A"/>
+  <!-- Flat/unimpressed mouth -->
+  <line x1="52" y1="54" x2="68" y2="54" stroke="#1A1A1A" stroke-width="2" stroke-linecap="round"/>
+  <!-- Left arm with quill tapping -->
+  <line x1="32" y1="65" x2="20" y2="55" stroke="#1A1A1A" stroke-width="2.5" stroke-linecap="round"/>
+  <!-- Quill pointing down (tapping) -->
+  <line x1="20" y1="55" x2="22" y2="80" stroke="#1A1A1A" stroke-width="1.5"/>
+  <path d="M22 80 L19 76 L25 77 Z" fill="#F9A825"/>
+  <!-- Tap lines -->
+  <line x1="19" y1="82" x2="25" y2="82" stroke="#1A1A1A" stroke-width="1" opacity="0.5"/>
+  <line x1="20" y1="85" x2="24" y2="85" stroke="#1A1A1A" stroke-width="1" opacity="0.3"/>
+  <!-- Right arm crossed -->
+  <line x1="88" y1="62" x2="75" y2="70" stroke="#1A1A1A" stroke-width="2.5" stroke-linecap="round"/>
+  <!-- Feet -->
+  <ellipse cx="45" cy="100" rx="10" ry="5" fill="#C4A882" stroke="#1A1A1A" stroke-width="2"/>
+  <ellipse cx="75" cy="100" rx="10" ry="5" fill="#C4A882" stroke="#1A1A1A" stroke-width="2"/>
+</svg>

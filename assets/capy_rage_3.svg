@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
+  <!-- Capy Rage 3: Gritted teeth, steam lines, tight quill grip -->
+  <!-- Body -->
+  <ellipse cx="60" cy="75" rx="35" ry="28" fill="#C4A882" stroke="#1A1A1A" stroke-width="2.5"/>
+  <!-- Belly -->
+  <ellipse cx="60" cy="80" rx="22" ry="18" fill="#FAF3E8"/>
+  <!-- Head -->
+  <ellipse cx="60" cy="42" rx="25" ry="22" fill="#C4A882" stroke="#1A1A1A" stroke-width="2.5"/>
+  <!-- Ears -->
+  <ellipse cx="42" cy="26" rx="8" ry="6" fill="#C4A882" stroke="#1A1A1A" stroke-width="2"/>
+  <ellipse cx="42" cy="26" rx="5" ry="3.5" fill="#F5C6C6"/>
+  <ellipse cx="78" cy="26" rx="8" ry="6" fill="#C4A882" stroke="#1A1A1A" stroke-width="2"/>
+  <ellipse cx="78" cy="26" rx="5" ry="3.5" fill="#F5C6C6"/>
+  <!-- Angry eyes - angular -->
+  <path d="M46 38 L54 36 L54 42 L46 44 Z" fill="#1A1A1A"/>
+  <path d="M66 36 L74 38 L74 44 L66 42 Z" fill="#1A1A1A"/>
+  <!-- Angry eyebrows -->
+  <line x1="44" y1="30" x2="56" y2="34" stroke="#1A1A1A" stroke-width="3" stroke-linecap="round"/>
+  <line x1="76" y1="30" x2="64" y2="34" stroke="#1A1A1A" stroke-width="3" stroke-linecap="round"/>
+  <!-- Nose -->
+  <ellipse cx="60" cy="48" rx="4" ry="2.5" fill="#1A1A1A"/>
+  <!-- Gritted teeth -->
+  <rect x="49" y="52" width="22" height="7" rx="2" fill="#FFFFFF" stroke="#1A1A1A" stroke-width="2"/>
+  <line x1="53" y1="52" x2="53" y2="59" stroke="#1A1A1A" stroke-width="1"/>
+  <line x1="57" y1="52" x2="57" y2="59" stroke="#1A1A1A" stroke-width="1"/>
+  <line x1="60" y1="52" x2="60" y2="59" stroke="#1A1A1A" stroke-width="1"/>
+  <line x1="63" y1="52" x2="63" y2="59" stroke="#1A1A1A" stroke-width="1"/>
+  <line x1="67" y1="52" x2="67" y2="59" stroke="#1A1A1A" stroke-width="1"/>
+  <!-- Steam lines from ears -->
+  <path d="M36 20 Q33 14 36 10" fill="none" stroke="#E65100" stroke-width="2" stroke-linecap="round" opacity="0.7"/>
+  <path d="M40 18 Q37 12 40 7" fill="none" stroke="#E65100" stroke-width="2" stroke-linecap="round" opacity="0.5"/>
+  <path d="M80 18 Q83 12 80 7" fill="none" stroke="#E65100" stroke-width="2" stroke-linecap="round" opacity="0.5"/>
+  <path d="M84 20 Q87 14 84 10" fill="none" stroke="#E65100" stroke-width="2" stroke-linecap="round" opacity="0.7"/>
+  <!-- Left arm gripping quill tightly -->
+  <line x1="30" y1="60" x2="14" y2="40" stroke="#1A1A1A" stroke-width="3" stroke-linecap="round"/>
+  <!-- Quill gripped tight -->
+  <line x1="14" y1="40" x2="8" y2="18" stroke="#1A1A1A" stroke-width="2"/>
+  <path d="M8 18 L5 22 L11 21 Z" fill="#E65100"/>
+  <path d="M8 18 L6 14 L10 16 Z" fill="#E65100"/>
+  <!-- Right fist -->
+  <circle cx="92" cy="62" r="6" fill="#C4A882" stroke="#1A1A1A" stroke-width="2"/>
+  <line x1="88" y1="65" x2="92" y2="62" stroke="#1A1A1A" stroke-width="2.5" stroke-linecap="round"/>
+  <!-- Feet -->
+  <ellipse cx="45" cy="100" rx="10" ry="5" fill="#C4A882" stroke="#1A1A1A" stroke-width="2"/>
+  <ellipse cx="75" cy="100" rx="10" ry="5" fill="#C4A882" stroke="#1A1A1A" stroke-width="2"/>
+</svg>
