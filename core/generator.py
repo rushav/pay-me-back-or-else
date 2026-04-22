@@ -1,47 +1,32 @@
-"""Claude API integration for letter generation."""
-
 import anthropic
+import streamlit as st
 
-from core.prompts import SYSTEM_MESSAGE, build_prompt
+from core.prompts import build_prompt
 
 
-def generate_letter(form_data: dict, rage_level: int, regenerate: bool = False) -> str:
-    """Generate a debt collection letter using the Claude API.
+def generate_letter(
+    form_data: dict,
+    rage_level: int,
+    family_friendly: bool,
+    regenerate: bool = False,
+) -> str:
+    """Call Claude API to generate a debt collection letter. Returns the letter text or an error string."""
+    system_msg, user_msg = build_prompt(form_data, rage_level, family_friendly, regenerate)
 
-    Args:
-        form_data: Dict with debtor info from the form.
-        rage_level: Integer 1-4.
-        regenerate: If True, request a different version.
-
-    Returns:
-        The generated letter text, or an error message string on failure.
-    """
     try:
-        client = anthropic.Anthropic()
-        user_message = build_prompt(form_data, rage_level, regenerate)
-
-        response = client.messages.create(
+        client = anthropic.Anthropic(api_key=st.secrets["ANTHROPIC_API_KEY"])
+        message = client.messages.create(
             model="claude-sonnet-4-20250514",
             max_tokens=1024,
             temperature=0.9,
-            system=SYSTEM_MESSAGE,
-            messages=[{"role": "user", "content": user_message}],
+            system=system_msg,
+            messages=[{"role": "user", "content": user_msg}],
+            timeout=15.0,
         )
-
-        return response.content[0].text
-
+        return message.content[0].text
     except anthropic.APIConnectionError:
-        return (
-            "Oops! Couldn't connect to the letter-writing bureau. "
-            "Check your internet connection and try again."
-        )
-    except anthropic.RateLimitError:
-        return (
-            "Whoa, too many letters at once! The letter-writing bureau is "
-            "overwhelmed. Wait a moment and try again."
-        )
+        return "ERROR: Could not connect to the AI service. Please check your internet connection and try again."
     except anthropic.APIError as e:
-        return (
-            f"The letter-writing bureau ran into a problem: {e.message}. "
-            "Try again in a moment."
-        )
+        return f"ERROR: The AI service returned an error. Please try again. ({e.message})"
+    except Exception:
+        return "ERROR: Something unexpected went wrong. Please try again."

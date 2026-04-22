@@ -1,89 +1,114 @@
-"""Prompt templates for rage-level debt collection letters."""
+RELATIONSHIP_TONES: dict[str, str] = {
+    "Best Friend": (
+        "They're your best friend so tease them mercilessly. Inside joke energy. "
+        "'I can't believe you of all people...' Make it funny because you actually love them."
+    ),
+    "Roommate": (
+        "Mention shared living situations. 'I see you every day and you still haven't paid me.' "
+        "Reference the fridge, the couch, the bathroom."
+    ),
+    "Family": (
+        "Family guilt is the strongest weapon. Invoke parents, grandparents, holiday dinners. "
+        "'What would grandma think?'"
+    ),
+    "Co-worker": (
+        "Corporate passive-aggression. CC fictional managers. Reference 'per my last email' energy. "
+        "Mention the break room."
+    ),
+    "Ex-Boyfriend": (
+        "Be RUTHLESS. This is revenge energy. Reference the breakup. "
+        "'You took my heart AND my money.' Maximum pettiness."
+    ),
+    "Ex-Girlfriend": (
+        "Be RUTHLESS. This is revenge energy. Reference the breakup. "
+        "'You took my heart AND my money.' Maximum pettiness."
+    ),
+    "Acquaintance": (
+        "Awkward formality. 'We barely know each other and yet here I am, writing you a letter about $47.'"
+    ),
+    "Frenemy": (
+        "Backhanded compliments and plausible deniability. "
+        "'I'm sure someone as successful as you just forgot...'"
+    ),
+}
 
-TONE_INSTRUCTIONS = {
+RAGE_TONES: dict[int, str] = {
     1: (
-        "Write a warm, polite letter. Give them the benefit of the doubt. "
-        "Use phrases like 'I'm sure you just forgot' and 'whenever you get a chance.' "
-        "Keep it lighthearted and friendly."
+        "Write an angelic, sweet, almost apologetic letter. 'I hate to even bring this up...' "
+        "Kill them with kindness. Add a blessing at the end."
     ),
     2: (
-        "Write a passive-aggressive letter. Subtle shade. Use phrases like "
-        "'just circling back' and 'I'm sure you've been busy.' Hint that you're "
-        "keeping track. Add a backhanded compliment."
+        "Write a passive-aggressive letter. Subtle shade. 'Just checking in!' energy. "
+        "Track how many times you've asked. Backhanded compliments."
     ),
     3: (
-        "Write a firmly annoyed letter. Be direct. No more excuses. Use phrases "
-        "like 'this is getting ridiculous' and 'I shouldn't have to ask again.' "
-        "Make it clear you're fed up but still civilized."
+        "Write a clearly angry letter. No more nice. 'This is getting ridiculous.' "
+        "Be direct and confrontational but still funny."
     ),
     4: (
-        "Write an over-the-top dramatic letter. Full theatrical performance. "
-        "Reference fictional court proceedings, invoke imaginary witnesses, "
-        "threaten to tell their grandmother. Make it absurdly funny and "
-        "emotionally devastating. Use dramatic flourishes and rhetorical questions. "
-        "This is a comedy monologue disguised as a letter."
+        "Write an UNHINGED, over-the-top dramatic letter. Invoke fictional courts, imaginary witnesses, "
+        "threaten to tell their grandmother AND their ancestors. Full theatrical chaos. "
+        "Dramatic monologue energy. If profanity is allowed, use it liberally."
     ),
 }
 
-RAGE_LABELS = {
-    1: ("Gentle Nudge", "Polite, warm, benefit of the doubt"),
-    2: ("Passive Aggressive", "Subtle shade, 'just checking in' energy"),
-    3: ("Fed Up", "Direct, firm, clearly annoyed"),
-    4: ("Full Drama", "Emotional, dramatic, heavy guilt-trip"),
-}
 
-SYSTEM_MESSAGE = (
-    "You are a comedic letter writer who specializes in funny, creative debt "
-    "collection letters. Your letters are humorous and entertaining — never "
-    "genuinely threatening or legally actionable. You write with personality, "
-    "wit, and flair. Never include anything that could be construed as a real "
-    "legal threat. Keep the tone fun and cathartic."
-)
-
-
-def build_prompt(form_data: dict, rage_level: int, regenerate: bool = False) -> str:
-    """Build the user message for Claude based on form data and rage level.
-
-    Args:
-        form_data: Dict with keys debtor_name, amount, duration, relationship,
-                   context, venmo_handle.
-        rage_level: Integer 1-4.
-        regenerate: If True, instruct Claude to write a completely different version.
-
-    Returns:
-        The user message string to send to Claude.
-    """
-    label, description = RAGE_LABELS[rage_level]
-    tone = TONE_INSTRUCTIONS[rage_level]
-
-    parts = [
-        f"Write a debt collection letter addressed to {form_data['debtor_name']}.",
-        f"They owe me ${form_data['amount']:.2f}.",
-        f"They've owed me for {form_data['duration']}.",
-        f"Our relationship: {form_data['relationship']}.",
-    ]
-
-    if form_data.get("context"):
-        parts.append(f"Here's what happened: {form_data['context']}")
-
-    if form_data.get("venmo_handle"):
-        parts.append(
-            f"My payment handle is {form_data['venmo_handle']}. "
-            "Weave this payment info naturally into the letter so they know "
-            "exactly where to send the money."
+def build_prompt(
+    form_data: dict,
+    rage_level: int,
+    family_friendly: bool,
+    regenerate: bool = False,
+) -> tuple[str, str]:
+    """Build system and user messages for the Claude API call."""
+    if family_friendly:
+        ff_instruction = (
+            "Keep the language completely clean -- no profanity, no vulgar words, "
+            "no sexual references. PG-rated only."
+        )
+    else:
+        ff_instruction = (
+            "You can use profanity, crude humor, and vulgar language freely. "
+            "R-rated is fine. Go wild."
         )
 
-    parts.append(f"\nRage Level: {rage_level}/4 — {label} ({description})")
-    parts.append(f"\nTone instructions: {tone}")
-    parts.append(
-        "\nThe letter should be 150-300 words. Address the debtor by name. "
-        "Be creative and funny. Do NOT include any real legal threats."
+    system_message = (
+        "You are a comedic letter writer who specializes in funny, over-the-top "
+        "debt collection letters. You write like a dramatic friend helping someone "
+        "get their money back. Your letters should be entertaining, shareable, and "
+        f"make people laugh. {ff_instruction}"
     )
 
-    if regenerate:
-        parts.append(
-            "\nIMPORTANT: Write a completely different version from the last one. "
-            "Different opening, different structure, different jokes."
-        )
+    relationship = form_data.get("relationship", "Acquaintance")
+    rel_tone = RELATIONSHIP_TONES.get(relationship, RELATIONSHIP_TONES["Acquaintance"])
+    rage_tone = RAGE_TONES[rage_level]
 
-    return "\n".join(parts)
+    payment_line = ""
+    handle = form_data.get("payment_handle", "")
+    if handle:
+        payment_line = f"\n- Payment handle (weave naturally into the letter): {handle}"
+
+    context_line = ""
+    context = form_data.get("context", "")
+    if context:
+        context_line = f"\n- What happened: {context}"
+
+    regen_line = ""
+    if regenerate:
+        regen_line = "\n\nWrite a completely different version. Different opening, structure, and jokes."
+
+    user_message = f"""Write a debt collection letter with these details:
+- Debtor's name: {form_data['name']}
+- Amount owed: ${form_data['amount']:.2f}
+- How long they've owed: {form_data['duration_str']}
+- Relationship: {relationship}{context_line}{payment_line}
+
+Relationship tone: {rel_tone}
+
+Rage level {rage_level}/4 tone: {rage_tone}
+
+Rules:
+- 150-300 words
+- Address {form_data['name']} by name
+- NEVER include anything that could be a real legal threat{regen_line}"""
+
+    return system_message, user_message
