@@ -1,1 +1,1 @@
-not applicable. 
+no bug detected, not applicable. 
