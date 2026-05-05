@@ -41,8 +41,8 @@ done-ness: from a polite nudge to full unhinged courtroom drama.
 
 | Check-in | Date | Required Progress |
 |----------|------|-------------------|
-|Check-in 1 | April 18, 2026 | App skeleton running locally, input form UI complete, Claude API connected and returning letters |
-|Check-in 2 | May 2, 2026 | Results page done (Copy, Regenerate, Save buttons working), rage level slider controls tone correctly |
+|Check-in 1 *(Completed)* | April 18, 2026 | App skeleton running locally, input form UI complete, Claude API connected and returning letters |
+|Check-in 2 *(Completed)* | May 2, 2026 | Results page done (Copy, Regenerate, Save buttons working), rage level slider controls tone correctly |
 |Check-in 3 | May 16, 2026 | History page working, illustrated UI style applied, all edge cases handled |
 |Final | June 1, 2026 | App deployed on Streamlit Cloud, README updated with live link, all 8 issues closed |
 
