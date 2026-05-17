@@ -1,68 +1,95 @@
+"""Claude API client for the chicken's tone-controlled letters."""
+
+from collections.abc import Iterator
+
 import anthropic
 import streamlit as st
 
 
-class LetterGenerationError(Exception):
-    """Raised when the Claude API call fails."""
-    pass
+MODEL = "claude-opus-4-5"
+MAX_TOKENS = 800
 
 
 TONE_INSTRUCTIONS = {
-    1: (
-        "Polite, warm, giving full benefit of the doubt. Friendly reminder energy."
-    ),
-    2: (
-        "Passive aggressive. Dripping with subtle shade. Lots of 'just checking in' "
-        "and 'no worries if you forgot'. The reader should feel the tension."
-    ),
-    3: (
-        "Direct and firm. Clearly annoyed. No more pleasantries. Mild implicit "
-        "pressure. Not rude, just done being patient."
-    ),
-    4: (
-        "Fully unhinged. Emotionally chaotic. Heavy guilt-trip. Dramatic. "
-        "Bordering on courtroom monologue. Maximum entertainment value."
-    ),
+    1: "polite and friendly, like a gentle reminder between close friends",
+    2: "passive aggressive, full of subtle shade and 'just checking in' energy",
+    3: "fed up and direct, with mild implicit threats and clear frustration",
+    4: "completely unhinged, emotionally chaotic, maximum drama, bordering on courtroom monologue",
 }
 
-SYSTEM_PROMPT = (
-    "You are a letter-writing assistant specializing in debt collection "
-    "letters that are funny, personal, and actually readable. Write only "
-    "the letter body — no subject line, no metadata, no commentary. "
-    "The letter should be 150–300 words."
-)
+
+class MissingAPIKeyError(RuntimeError):
+    pass
 
 
-def generate_letter(
+def _client() -> anthropic.Anthropic:
+    try:
+        api_key = st.secrets["ANTHROPIC_API_KEY"]
+    except (KeyError, FileNotFoundError, st.errors.StreamlitSecretNotFoundError):  # type: ignore[attr-defined]
+        raise MissingAPIKeyError(
+            "ANTHROPIC_API_KEY not set. Copy .streamlit/secrets.toml.example to "
+            ".streamlit/secrets.toml and add your key."
+        )
+    if not api_key or not str(api_key).strip():
+        raise MissingAPIKeyError("ANTHROPIC_API_KEY is empty in .streamlit/secrets.toml.")
+    return anthropic.Anthropic(api_key=api_key)
+
+
+def build_prompt(
     name: str,
-    amount: float,
-    duration_str: str,
+    amount: str,
+    duration: str,
+    unit: str,
     relationship: str,
     rage_level: int,
-    regenerate: bool = False,
+    context: str = "",
+    payment_handle: str = "",
 ) -> str:
-    """Call Claude API to generate a debt collection letter."""
-    user_prompt = f"""Write a debt collection letter with these details:
+    tone = TONE_INSTRUCTIONS[int(rage_level)]
+
+    extras = []
+    if context.strip():
+        extras.append(f"Background context: {context.strip()}")
+    if payment_handle.strip():
+        extras.append(f"Payment handle for them to send money to: {payment_handle.strip()}")
+    extra_block = ("\n" + "\n".join(extras) + "\n") if extras else ""
+
+    return f"""You are a chicken. Yes, a chicken. You are writing a debt-collection letter on behalf of your human, who is owed money by someone they know personally.
+
+Write the letter in a tone that is {tone}.
+
+Details:
 - Debtor's name: {name}
-- Amount owed: ${amount:.2f}
-- How long it has been: {duration_str}
-- My relationship to them: {relationship}
-- Rage level: {rage_level} out of 4
+- Amount owed: ${amount}
+- How long it's been owed: {duration} {unit}
+- Relationship to the debtor: {relationship}{extra_block}
 
-Tone instructions for rage level {rage_level}:
-{TONE_INSTRUCTIONS[rage_level]}
+Write the letter in lowercase (except for emphasis at higher rage levels), short lines, signed "— the chicken". No preamble, no apology for the request — just write the letter itself. Stay in character. Make it personal, specific, and actually feel like it was written by a chicken with feelings.
+"""
 
-Use {name}'s name and the specific dollar amount in the letter. Make it feel personal, not generic.
-{"Write a completely different version than any previous letter." if regenerate else ""}"""
 
-    try:
-        client = anthropic.Anthropic(api_key=st.secrets["ANTHROPIC_API_KEY"])
-        message = client.messages.create(
-            model="claude-opus-4-5-20250514",
-            max_tokens=600,
-            system=SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": user_prompt}],
-        )
-        return message.content[0].text
-    except Exception as e:
-        raise LetterGenerationError(str(e)) from e
+def stream_letter(form_data: dict) -> Iterator[str]:
+    """Yield text chunks from Claude as they arrive."""
+    client = _client()
+    prompt = build_prompt(
+        name=form_data.get("debtor_name", ""),
+        amount=str(form_data.get("amount", "")).lstrip("$"),
+        duration=str(form_data.get("time_owed", "")),
+        unit=str(form_data.get("time_unit", "")),
+        relationship=form_data.get("relationship", ""),
+        rage_level=int(form_data.get("rage_level", 1)),
+        context=form_data.get("context", ""),
+        payment_handle=form_data.get("payment_handle", ""),
+    )
+
+    with client.messages.stream(
+        model=MODEL,
+        max_tokens=MAX_TOKENS,
+        messages=[{"role": "user", "content": prompt}],
+    ) as stream:
+        for text in stream.text_stream:
+            yield text
+
+
+def generate_letter(form_data: dict) -> str:
+    return "".join(stream_letter(form_data))

@@ -1,0 +1,69 @@
+name: pre-deploy smoke test
+
+# Streamlit Community Cloud auto-deploys on push to main. This workflow
+# runs first; if it fails, the maintainer sees the failure on GitHub
+# before the broken code is auto-pulled by Community Cloud. (Community
+# Cloud will still attempt to deploy — there's no API to gate it — but
+# this job catches the most common breakages so we can revert fast.)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  smoke-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Validate Python syntax (py_compile across the tree)
+        run: |
+          set -e
+          mapfile -t files < <(find . -name "*.py" \
+            -not -path "./venv/*" \
+            -not -path "./.venv/*" \
+            -not -path "./__pycache__/*" \
+            -not -path "*/__pycache__/*")
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "no python files found"; exit 1
+          fi
+          for f in "${files[@]}"; do
+            echo "compiling $f"
+            python -m py_compile "$f"
+          done
+
+      - name: Import app (catches missing modules, asset paths, etc.)
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          python -c "import app; print('app import OK')"
+
+      - name: Sanity-run via Streamlit AppTest harness
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          python -c "
+          from streamlit.testing.v1 import AppTest
+          at = AppTest.from_file('app.py')
+          at.run(timeout=60)
+          assert not at.exception, f'app raised: {list(at.exception)}'
+          print('AppTest pass — no unhandled exceptions on cold load')
+          "

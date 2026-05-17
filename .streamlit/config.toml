@@ -1,9 +1,25 @@
-[theme]
-primaryColor = "#1A1A1A"
-backgroundColor = "#FDF6E3"
-secondaryBackgroundColor = "#F5E6E0"
-textColor = "#1A1A1A"
-font = "serif"
+# Production-appropriate Streamlit config. Safe to commit — no secrets.
 
 [server]
 headless = true
+runOnSave = false
+enableXsrfProtection = true
+enableCORS = false
+
+[browser]
+gatherUsageStats = false
+
+[client]
+showErrorDetails = false
+toolbarMode = "minimal"
+
+[theme]
+# These tokens are matched to the design's crayon palette so any
+# Streamlit-rendered chrome (alerts, etc.) doesn't clash with the
+# kid's-drawing-paper aesthetic.
+base = "light"
+primaryColor = "#1c3b8f"        # crayon navy
+backgroundColor = "#cce4f3"     # sky-clear fallback
+secondaryBackgroundColor = "#f6ecd1"  # cream paper
+textColor = "#1a1410"
+font = "sans serif"
