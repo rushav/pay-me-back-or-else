@@ -2,9 +2,8 @@
 
 The whole interactive UI is one React app rendered inside a single
 ``streamlit.components.v1.html`` iframe. This module returns the JS that
-defines the shared atoms (colors, paper textures, sky backdrop, chicken
-video, header) — every other component module pulls from globals defined
-here.
+defines the shared atoms (colors, paper textures, header) — every other
+component module pulls from globals defined here.
 """
 
 

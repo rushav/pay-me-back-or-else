@@ -18,8 +18,8 @@ done-ness: from a polite nudge to full unhinged courtroom drama.
 - AI-generated letter via Claude API — streams character-by-character in a crayon handwriting font with per-character jitter
 - Regenerate, Copy, Save, Send Email, Start Over actions
 - "The Hall of Grudges" — draggable sticky note in the top-right with horizontal-scroll grudge cards, save and delete (with confirmation)
-- Animated chicken mascot that scrubs through rage states as you change the tone
-- Full-bleed sky background that cross-fades with the rage level
+- Chicken mascot, thermometer, and kid's drawing that cross-fade through their rage states as you change the tone
+- Full-bleed storybook desk background
 
 
 ## Tech Stack
@@ -128,8 +128,8 @@ line near the top of this README.
 | `services/claude_service.py` | Prompt builder and `messages.stream` wrapper. |
 | `services/db_service.py` | SQLite save/get/delete for the hall of grudges. |
 | `utils/validators.py` | Form input validation. |
-| `assets/styles.css` | Streamlit-level CSS — hides Streamlit chrome and renders the sky-background layers behind the iframe. |
-| `design/` | Source assets from the design handoff — `chicken.mp4`, `sky_rage_{1..4}.png`, `T{1..4}.png`. |
+| `assets/styles.css` | Streamlit-level CSS — hides Streamlit chrome and renders the desk-background layer behind the iframe. |
+| `design/` | Source assets from the design handoff — `main_table.png`, `chicken{1..4}-removebg-preview.png`, `T{1..4}-removebg-preview.png`, `drawing{1..4}-removebg-preview.png`. |
 | `.streamlit/config.toml` | Production server / browser / theme config (committed). |
 | `.streamlit/secrets.toml.example` | Placeholder for the Anthropic key (real `secrets.toml` is gitignored). |
 | `.env.example` | Documentation-only stub; the app reads from `st.secrets`, not `.env`. |

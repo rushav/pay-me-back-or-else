@@ -33,28 +33,18 @@ section.main > div.block-container {
   gap: 0 !important;
 }
 
-/* The sky lives outside the iframe — four crossfading layers. */
-.pmb-sky {
+/* The desk lives outside the iframe — a single static base layer. */
+.pmb-desk {
   position: fixed;
   inset: 0;
   z-index: -10;
   pointer-events: none;
-  overflow: hidden;
-  background: #cce4f3;
-}
-.pmb-sky-layer {
-  position: absolute;
-  inset: 0;
   background-size: cover;
   background-position: center;
-  opacity: 0;
-  transition: opacity 0.9s ease;
-}
-.pmb-sky-layer.active {
-  opacity: 1;
+  background-repeat: no-repeat;
 }
 
-/* The iframe wrapper sits flush over the sky. */
+/* The iframe wrapper sits flush over the desk. */
 iframe[title="streamlit_app.components.v1.html.html"],
 [data-testid="stIFrame"] iframe,
 iframe[srcdoc] {

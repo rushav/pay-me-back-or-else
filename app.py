@@ -14,7 +14,6 @@ from pathlib import Path
 import streamlit as st
 import streamlit.components.v1 as components
 
-from components.background import background_js
 from components.form import form_js
 from components.history import history_js
 from components.letter_paper import letter_paper_js
@@ -40,9 +39,10 @@ def _b64(path: Path) -> str:
 @st.cache_resource(show_spinner=False)
 def _asset_uris() -> dict:
     return {
-        "chicken":  f"data:video/mp4;base64,{_b64(DESIGN_DIR / 'chicken.mp4')}",
-        "sky":      [f"data:image/png;base64,{_b64(DESIGN_DIR / f'sky_rage_{i}.png')}" for i in (1, 2, 3, 4)],
-        "therm":    [f"data:image/png;base64,{_b64(DESIGN_DIR / f'T{i}.png')}" for i in (1, 2, 3, 4)],
+        "desk":     f"data:image/png;base64,{_b64(DESIGN_DIR / 'main_table.png')}",
+        "chicken":  [f"data:image/png;base64,{_b64(DESIGN_DIR / f'chicken{i}-removebg-preview.png')}" for i in (1, 2, 3, 4)],
+        "therm":    [f"data:image/png;base64,{_b64(DESIGN_DIR / f'T{i}-removebg-preview.png')}" for i in (1, 2, 3, 4)],
+        "drawing":  [f"data:image/png;base64,{_b64(DESIGN_DIR / f'drawing{i}-removebg-preview.png')}" for i in (1, 2, 3, 4)],
     }
 
 
@@ -164,17 +164,12 @@ def _handle_action(payload: dict) -> None:
         st.session_state["api_error"] = None
 
 
-# ── Sky background (rendered outside the iframe) ──────────────
+# ── Desk background (rendered outside the iframe) ─────────────
 
-def _render_sky(rage: int, sky_uris: list[str]) -> None:
-    layers = "".join(
-        f'<div class="pmb-sky-layer{" active" if i + 1 == rage else ""}" '
-        f'style="background-image:url({uri});"></div>'
-        for i, uri in enumerate(sky_uris)
-    )
+def _render_desk(desk_uri: str) -> None:
     st.markdown(
         f'<style>{_styles_css()}</style>'
-        f'<div class="pmb-sky">{layers}</div>',
+        f'<div class="pmb-desk" style="background-image:url({desk_uri});"></div>',
         unsafe_allow_html=True,
     )
 
@@ -182,16 +177,16 @@ def _render_sky(rage: int, sky_uris: list[str]) -> None:
 # ── Iframe HTML assembly ──────────────────────────────────────
 
 APP_JS_TEMPLATE = r"""
-window.SKY_IMGS = __SKY_IMGS__;
+window.CHICKEN_IMGS = __CHICKEN_IMGS__;
 window.T_IMGS = __T_IMGS__;
-window.CHICKEN_SRC = __CHICKEN_SRC__;
+window.DRAWING_IMGS = __DRAWING_IMGS__;
 
 // Use shared list names used by components.
-const SKY_IMGS = window.SKY_IMGS;
+const CHICKEN_IMGS = window.CHICKEN_IMGS;
 const T_IMGS = window.T_IMGS;
+const DRAWING_IMGS = window.DRAWING_IMGS;
 
 __SHARED__
-__BACKGROUND__
 __MASCOT__
 __RAGE_METER__
 __FORM__
@@ -336,7 +331,7 @@ function App() {
         zIndex: 10,
       },
     },
-      React.createElement(ChickenVideo, {
+      React.createElement(Chicken, {
         rage, width: 1120,
         style: {
           position: 'absolute', left: 0, top: 0, width: 1120,
@@ -344,6 +339,18 @@ function App() {
           transformOrigin: 'center top',
         },
       })
+    ),
+
+    // Bottom-right: kid's drawing prop sitting on the desk.
+    React.createElement('div', {
+      style: {
+        position: 'absolute',
+        right: 48, bottom: 28,
+        width: 300, pointerEvents: 'none',
+        zIndex: 3,
+      },
+    },
+      React.createElement(Drawing, { rage, width: 300 })
     ),
 
     // Center: letter paper
@@ -425,11 +432,10 @@ def _build_iframe_html(state: dict, assets: dict) -> str:
 
     app_js = (
         APP_JS_TEMPLATE
-        .replace("__SKY_IMGS__", json.dumps(assets["sky"]))
+        .replace("__CHICKEN_IMGS__", json.dumps(assets["chicken"]))
         .replace("__T_IMGS__", json.dumps(assets["therm"]))
-        .replace("__CHICKEN_SRC__", json.dumps(assets["chicken"]))
+        .replace("__DRAWING_IMGS__", json.dumps(assets["drawing"]))
         .replace("__SHARED__", shared_js())
-        .replace("__BACKGROUND__", background_js())
         .replace("__MASCOT__", mascot_js())
         .replace("__RAGE_METER__", rage_meter_js())
         .replace("__FORM__", form_js())
@@ -472,18 +478,6 @@ def _build_iframe_html(state: dict, assets: dict) -> str:
 </head>
 <body>
   <div id="root"></div>
-  <svg width="0" height="0" style="position:absolute; pointer-events:none;" aria-hidden="true">
-    <defs>
-      <filter id="knockout-white" x="0" y="0" width="100%" height="100%">
-        <feColorMatrix type="matrix" values="
-          1 0 0 0 0
-          0 1 0 0 0
-          0 0 1 0 0
-          -3 -3 -3 1 7
-        "/>
-      </filter>
-    </defs>
-  </svg>
   <script>
 {app_js}
   </script>
@@ -504,9 +498,9 @@ def main() -> None:
     _init_state()
     ss = st.session_state
 
-    # Sky background (outside the iframe).
+    # Desk background (outside the iframe).
     assets = _asset_uris()
-    _render_sky(ss["rage_level"], assets["sky"])
+    _render_desk(assets["desk"])
 
     # data-rage attribute on the page body for any external CSS hooks.
     st.markdown(
