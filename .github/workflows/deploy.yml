@@ -22,6 +22,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Secret scan — fail on leaked API keys
+        run: |
+          # Match real Anthropic keys (long token). Placeholders like
+          # "sk-ant-..." / "sk-..." are too short to match. The bundled venv,
+          # *.example templates, SECURITY.md, and workflows are excluded.
+          if git grep -nIE 'sk-ant-[A-Za-z0-9_-]{40,}' -- \
+               ':(exclude)venv' \
+               ':(exclude)*.example' \
+               ':(exclude)SECURITY.md' \
+               ':(exclude).github/workflows'; then
+            echo "::error::Potential leaked Anthropic API key found in tracked files."
+            exit 1
+          fi
+          echo "secret scan clean — no leaked API keys in tracked files"
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
