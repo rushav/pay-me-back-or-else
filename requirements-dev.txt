@@ -1,0 +1,4 @@
+# Development / test dependencies (not installed in production).
+# Install with:  python -m pip install -r requirements-dev.txt
+-r requirements.txt
+pytest==9.0.3
