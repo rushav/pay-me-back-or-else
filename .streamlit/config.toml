@@ -5,6 +5,9 @@ headless = true
 runOnSave = false
 enableXsrfProtection = true
 enableCORS = false
+# Serve ./static at <app>/app/static/<file> so large image assets are fetched
+# as normal files instead of base64-embedded into the component iframe.
+enableStaticServing = true
 
 [browser]
 gatherUsageStats = false

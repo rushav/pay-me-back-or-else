@@ -6,9 +6,7 @@ session state and the Claude API call; the iframe owns the visual scene and
 talks back via the standard component setComponentValue protocol.
 """
 
-import base64
 import json
-import time
 from pathlib import Path
 
 import streamlit as st
@@ -31,19 +29,19 @@ ASSETS_DIR = REPO_ROOT / "assets"
 
 
 # ── Asset loading ─────────────────────────────────────────────
+#
+# Assets are served via Streamlit static file serving (./static, exposed at
+# <app>/app/static/<file>) rather than base64-embedded into the iframe. This
+# keeps the component HTML tiny — a large base64 srcdoc fails to render on
+# Streamlit Community Cloud (blank page), while rendering fine locally.
 
-@st.cache_resource(show_spinner=False)
-def _b64(path: Path) -> str:
-    return base64.b64encode(path.read_bytes()).decode("ascii")
 
-
-@st.cache_resource(show_spinner=False)
-def _asset_uris() -> dict:
+def _asset_files() -> dict:
     return {
-        "desk":     f"data:image/png;base64,{_b64(DESIGN_DIR / 'main_table.png')}",
-        "chicken":  [f"data:image/png;base64,{_b64(DESIGN_DIR / f'chicken{i}-removebg-preview.png')}" for i in (1, 2, 3, 4)],
-        "therm":    [f"data:image/png;base64,{_b64(DESIGN_DIR / f'T{i}-removebg-preview.png')}" for i in (1, 2, 3, 4)],
-        "drawing":  [f"data:image/png;base64,{_b64(DESIGN_DIR / f'drawing{i}-removebg-preview.png')}" for i in (1, 2, 3, 4)],
+        "desk":     "main_table.png",
+        "chicken":  [f"chicken{i}-removebg-preview.png" for i in (1, 2, 3, 4)],
+        "therm":    [f"T{i}-removebg-preview.png" for i in (1, 2, 3, 4)],
+        "drawing":  [f"drawing{i}-removebg-preview.png" for i in (1, 2, 3, 4)],
     }
 
 
@@ -177,16 +175,26 @@ def _handle_action(payload: dict) -> None:
 # ── Iframe HTML assembly ──────────────────────────────────────
 
 APP_JS_TEMPLATE = r"""
-window.CHICKEN_IMGS = __CHICKEN_IMGS__;
-window.T_IMGS = __T_IMGS__;
-window.DRAWING_IMGS = __DRAWING_IMGS__;
-window.DESK_SRC = __DESK_SRC__;
+window.CHICKEN_FILES = __CHICKEN_IMGS__;
+window.T_FILES = __T_IMGS__;
+window.DRAWING_FILES = __DRAWING_IMGS__;
+window.DESK_FILE = __DESK_SRC__;
 
-// Use shared list names used by components.
-const CHICKEN_IMGS = window.CHICKEN_IMGS;
-const T_IMGS = window.T_IMGS;
-const DRAWING_IMGS = window.DRAWING_IMGS;
-const DESK_SRC = window.DESK_SRC;
+// Assets are fetched from Streamlit static serving, not base64-embedded.
+// Files live in ./static and are served at <app>/app/static/<file>. The
+// srcdoc iframe is same-origin, so build absolute URLs from the parent
+// location (with a relative fallback if that read is ever blocked).
+let STATIC_BASE;
+try {
+  const L = window.parent.location;
+  STATIC_BASE = L.origin + L.pathname.replace(/\/+$/, '') + '/app/static/';
+} catch (e) {
+  STATIC_BASE = 'app/static/';
+}
+const CHICKEN_IMGS = window.CHICKEN_FILES.map(function (f) { return STATIC_BASE + f; });
+const T_IMGS = window.T_FILES.map(function (f) { return STATIC_BASE + f; });
+const DRAWING_IMGS = window.DRAWING_FILES.map(function (f) { return STATIC_BASE + f; });
+const DESK_SRC = STATIC_BASE + window.DESK_FILE;
 
 // Fixed design-space stage. Everything is positioned in these 1440x900
 // coordinates, then the stage is scaled to fit the viewport (letterbox).
@@ -576,7 +584,7 @@ def main() -> None:
     _init_state()
     ss = st.session_state
 
-    assets = _asset_uris()
+    assets = _asset_files()
     # Page-chrome reset + neutral fill behind the letterboxed stage. The desk
     # itself now lives inside the iframe (it's the zoomable camera layer).
     st.markdown(f"<style>{_styles_css()}</style>", unsafe_allow_html=True)
