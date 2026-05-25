@@ -5,62 +5,24 @@ def history_js() -> str:
     return r"""
 const RAGE_FG = { 1: '#1c3b8f', 2: '#5a3a1a', 3: '#c8421a', 4: '#0a0a0a' };
 
-function HallStickyNote({ currentRage, letters, onDelete }) {
-  const savedPos = (() => {
-    try {
-      const raw = sessionStorage.getItem('hall_pos');
-      if (raw) return JSON.parse(raw);
-    } catch (e) {}
-    return null;
-  })();
-  const init = useMemo(() => savedPos || ({
-    x: Math.max(20, window.innerWidth - 300),
-    y: 32,
-  }), []);
-  const [pos, setPos] = useState(init);
-  const [dragging, setDragging] = useState(false);
+// Bottom-left collapsible drawer (anchored bottom-left; grows up + right).
+function HallDrawer({ currentRage, letters, onDelete, active, animate }) {
   const [open, setOpen] = useState(false);
   const [confirmId, setConfirmId] = useState(null);
 
-  const onPointerDown = (e) => {
-    if (e.target.closest('button, [data-no-drag]')) return;
-    e.preventDefault();
-    setDragging(true);
-    const start = { x: e.clientX, y: e.clientY, ox: pos.x, oy: pos.y };
-    const move = (ev) => {
-      const next = {
-        x: Math.max(-40, Math.min(window.innerWidth - 60, start.ox + ev.clientX - start.x)),
-        y: Math.max(-20, Math.min(window.innerHeight - 60, start.oy + ev.clientY - start.y)),
-      };
-      setPos(next);
-    };
-    const up = () => {
-      setDragging(false);
-      try { sessionStorage.setItem('hall_pos', JSON.stringify({ x: pos.x, y: pos.y })); } catch (e) {}
-      window.removeEventListener('pointermove', move);
-      window.removeEventListener('pointerup', up);
-    };
-    window.addEventListener('pointermove', move);
-    window.addEventListener('pointerup', up);
-  };
-
-  useEffect(() => {
-    try { sessionStorage.setItem('hall_pos', JSON.stringify(pos)); } catch (e) {}
-  }, [pos]);
-
   const count = letters?.length || 0;
-  const W = open ? 560 : 280;
-  const H = open ? 380 : 96;
+  const W = open ? 460 : 130;
+  const H = open ? 330 : 120;
 
   return React.createElement('div', {
-    onPointerDown,
     style: {
-      position: 'fixed', left: pos.x, top: pos.y,
-      zIndex: dragging ? 90 : 60,
-      cursor: dragging ? 'grabbing' : 'grab',
-      touchAction: 'none',
-      transition: dragging ? 'none'
-        : 'width .35s cubic-bezier(.2,.7,.2,1), height .35s cubic-bezier(.2,.7,.2,1)',
+      position: 'absolute', left: 80, bottom: 40,
+      width: W, height: H,
+      zIndex: open ? 30 : 6,
+      opacity: active ? 1 : 0,
+      pointerEvents: active ? 'auto' : 'none',
+      transition: (animate ? 'opacity 380ms ease 320ms, ' : '')
+        + 'width .35s cubic-bezier(.2,.7,.2,1), height .35s cubic-bezier(.2,.7,.2,1)',
     },
   },
     React.createElement(KidPaper, {
@@ -79,45 +41,39 @@ function HallStickyNote({ currentRage, letters, onDelete }) {
 }
 
 function CollapsedHallView({ count, onOpen }) {
-  return React.createElement('div', {
+  return React.createElement('button', {
+    'data-no-drag': true,
+    onClick: onOpen,
+    'aria-label': 'open hall of grudges',
     style: {
       position: 'absolute', inset: 0,
-      padding: '14px 20px',
-      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      gap: 12, boxSizing: 'border-box',
+      padding: '12px 10px',
+      display: 'flex', flexDirection: 'column',
+      alignItems: 'center', justifyContent: 'center',
+      gap: 6, boxSizing: 'border-box',
+      background: 'transparent', border: 'none', cursor: 'pointer',
+      width: '100%', height: '100%',
     },
   },
-    React.createElement('div', { style: { display: 'flex', flexDirection: 'column', minWidth: 0 } },
-      React.createElement('div', {
-        style: {
-          fontFamily: '"Gochi Hand", cursive',
-          fontSize: 24, color: CRAYON_NAVY,
-          lineHeight: 1.05, letterSpacing: '.5px',
-        },
-      }, 'the hall of', React.createElement('br'), 'grudges'),
-      React.createElement('div', {
-        style: {
-          fontFamily: '"Gochi Hand", cursive',
-          fontSize: 15, color: PENCIL_GRAY, opacity: .8, marginTop: 4,
-        },
-      }, `${count} letter${count === 1 ? '' : 's'} · drag me`)
-    ),
-    React.createElement('button', {
-      'data-no-drag': true,
-      onClick: onOpen,
+    React.createElement('div', {
       style: {
-        flexShrink: 0, background: 'transparent',
-        border: 'none', padding: 4, cursor: 'pointer',
+        fontFamily: '"Gochi Hand", cursive',
+        fontSize: 17, color: CRAYON_NAVY,
+        lineHeight: 1.05, letterSpacing: '.4px', textAlign: 'center',
       },
-      'aria-label': 'open hall of grudges',
+    }, 'the hall of', React.createElement('br'), 'grudges'),
+    React.createElement('div', {
+      style: {
+        fontFamily: '"Gochi Hand", cursive',
+        fontSize: 13, color: PENCIL_GRAY, opacity: .8,
+      },
+    }, `${count} on file`),
+    React.createElement(RoughBox, {
+      stroke: CRAYON_NAVY, strokeWidth: 2, seed: 29, padding: '4px 12px',
     },
-      React.createElement(RoughBox, {
-        stroke: CRAYON_NAVY, strokeWidth: 2.2, seed: 29, padding: '6px 12px',
-      },
-        React.createElement('span', {
-          style: { fontFamily: '"Gochi Hand", cursive', fontSize: 18, color: CRAYON_NAVY },
-        }, 'open')
-      )
+      React.createElement('span', {
+        style: { fontFamily: '"Gochi Hand", cursive', fontSize: 15, color: CRAYON_NAVY },
+      }, 'open')
     )
   );
 }

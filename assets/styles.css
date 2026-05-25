@@ -14,7 +14,8 @@ html, body, #root {
 }
 
 [data-testid="stAppViewContainer"] {
-  background: transparent !important;
+  /* Neutral fill behind the letterboxed stage (desk now lives in the iframe). */
+  background: #15110c !important;
 }
 
 [data-testid="stMain"] {
@@ -33,18 +34,7 @@ section.main > div.block-container {
   gap: 0 !important;
 }
 
-/* The desk lives outside the iframe — a single static base layer. */
-.pmb-desk {
-  position: fixed;
-  inset: 0;
-  z-index: -10;
-  pointer-events: none;
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
-}
-
-/* The iframe wrapper sits flush over the desk. */
+/* The iframe holds the full scene (desk + stage); it sits over a neutral fill. */
 iframe[title="streamlit_app.components.v1.html.html"],
 [data-testid="stIFrame"] iframe,
 iframe[srcdoc] {

@@ -147,24 +147,19 @@ function WorksheetDropdown({ value, onChange, options, seed = 71 }) {
   );
 }
 
-function WorksheetForm({ rage, values, onChange, onSubmit, errors, busy }) {
+// Normal-flow worksheet form body (no paper of its own — it shares the
+// centered worksheet with the letter area).
+function WorksheetFormBody({ rage, values, onChange, onSubmit, errors, busy }) {
   const set = (k) => (v) => onChange({ ...values, [k]: v });
   const c = CRAYON[rage];
-  const W = 400, H = 720;
 
   const errSet = new Set(errors || []);
   const hasErr = (field) => Array.from(errSet).some(e => e.includes(field.replace('_', ' ')));
 
-  return React.createElement(KidPaper, {
-    width: W, height: H, seed: 11, tone: PAPER_BG_ALT, rotation: 1.4,
-  },
-    React.createElement('div', {
+  return React.createElement('div', {
       style: {
-        position: 'absolute', inset: 0,
-        padding: '32px 32px 26px',
-        boxSizing: 'border-box',
-        display: 'flex', flexDirection: 'column', gap: 10,
-        overflow: 'hidden',
+        flex: '0 0 auto',
+        display: 'flex', flexDirection: 'column', gap: 8,
       },
     },
       React.createElement('div', {
@@ -295,7 +290,6 @@ function WorksheetForm({ rage, values, onChange, onSubmit, errors, busy }) {
           )
         )
       )
-    )
   );
 }
 """

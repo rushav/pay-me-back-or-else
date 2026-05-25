@@ -154,88 +154,108 @@ function LetterActions({ rage, letter, onCopy, onRegenerate, onSave, onEmail, on
   );
 }
 
-function LetterPaper({ rage, letter, version, busy, onCopy, onRegenerate, onSave, onEmail, onStartOver, savedFlash, planeFlash }) {
+// Normal-flow letter area (shares the centered worksheet with the form).
+function LetterBody({ rage, letter, version, busy, onCopy, onRegenerate, onSave, onEmail, onStartOver }) {
   const empty = !letter;
-  const W = 460, H = 700;
+  return React.createElement('div', {
+    style: { flex: '1 1 auto', minHeight: 0, display: 'flex', flexDirection: 'column' },
+  },
+    React.createElement('div', {
+      style: {
+        display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
+        fontFamily: '"Gochi Hand", cursive',
+        color: PENCIL_GRAY, fontSize: 16,
+        marginBottom: 8, opacity: empty ? .5 : .85, flex: '0 0 auto',
+      },
+    },
+      React.createElement('span', null, 'from: the chicken'),
+      React.createElement('span', null, `tone: ${CRAYON[rage].label}`)
+    ),
 
+    empty && !busy && React.createElement('div', {
+      style: {
+        flex: 1,
+        display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center',
+        textAlign: 'center', gap: 8, color: PENCIL_GRAY,
+      },
+    },
+      React.createElement('div', {
+        style: {
+          fontFamily: '"Gochi Hand", cursive',
+          fontSize: 26, lineHeight: 1.15, color: CRAYON_NAVY,
+        },
+      }, 'the chicken is waiting.'),
+      React.createElement('div', {
+        style: {
+          fontFamily: '"Gochi Hand", cursive',
+          fontSize: 18, color: PENCIL_GRAY, opacity: .8,
+        },
+      },
+        'fill out the worksheet above.', React.createElement('br'),
+        'pick a tone on the left.', React.createElement('br'),
+        'the chicken will write the letter.'
+      )
+    ),
+
+    empty && busy && React.createElement('div', {
+      style: {
+        flex: 1, display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center',
+        textAlign: 'center', color: CRAYON[rage].main,
+      },
+    },
+      React.createElement('div', {
+        style: { fontFamily: '"Gochi Hand", cursive', fontSize: 28 },
+      }, 'the chicken is writing…'),
+      React.createElement('div', {
+        style: {
+          marginTop: 10, fontFamily: '"Gochi Hand", cursive',
+          fontSize: 18, color: PENCIL_GRAY, opacity: .7,
+        },
+      }, '(give it a moment)')
+    ),
+
+    !empty && React.createElement(React.Fragment, null,
+      React.createElement('div', { style: { flex: '1 1 auto', minHeight: 0, overflow: 'auto' } },
+        React.createElement(StreamedCrayon, { text: letter, rage, version, fontSize: 21 })
+      ),
+      React.createElement(LetterActions, {
+        rage, letter, busy,
+        onCopy, onRegenerate, onSave, onEmail, onStartOver,
+      })
+    )
+  );
+}
+
+// The merged worksheet: form fields + generated-letter area on ONE paper.
+function Worksheet({ rage, values, onChange, onSubmit, errors, busy,
+                     letter, version, onCopy, onRegenerate, onSave, onEmail, onStartOver,
+                     savedFlash, planeFlash }) {
+  const W = 760, H = 780;
   return React.createElement('div', { style: { position: 'relative' } },
     React.createElement(SavedStamp, { show: savedFlash, rage }),
-    React.createElement(KidPaper, { width: W, height: H, seed: 3, rotation: -1.2 },
+    React.createElement(KidPaper, { width: W, height: H, seed: 11, tone: PAPER_BG_ALT, rotation: 0.6 },
       React.createElement('div', {
         style: {
           position: 'absolute', inset: 0,
-          padding: '40px 48px 30px',
+          padding: '30px 40px 26px',
           boxSizing: 'border-box',
-          display: 'flex', flexDirection: 'column',
+          display: 'flex', flexDirection: 'column', gap: 10,
           overflow: 'hidden',
         },
       },
+        React.createElement(WorksheetFormBody, { rage, values, onChange, onSubmit, errors, busy }),
         React.createElement('div', {
           style: {
-            display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
-            fontFamily: '"Gochi Hand", cursive',
-            color: PENCIL_GRAY, fontSize: 18,
-            marginBottom: 14, opacity: empty ? 0 : .85,
+            flex: '0 0 auto', height: 1, margin: '2px 0',
+            background: 'repeating-linear-gradient(to right, rgba(60,40,10,.4) 0 6px, transparent 6px 10px)',
           },
-        },
-          React.createElement('span', null, 'from: the chicken'),
-          React.createElement('span', null, `tone: ${CRAYON[rage].label}`)
-        ),
-
-        empty && !busy && React.createElement('div', {
-          style: {
-            flex: 1,
-            display: 'flex', flexDirection: 'column',
-            alignItems: 'center', justifyContent: 'center',
-            textAlign: 'center', gap: 14, color: PENCIL_GRAY,
-          },
-        },
-          React.createElement('div', {
-            style: {
-              fontFamily: '"Gochi Hand", cursive',
-              fontSize: 30, lineHeight: 1.15,
-              color: CRAYON_NAVY, maxWidth: 380,
-            },
-          }, 'the chicken is waiting.'),
-          React.createElement('div', {
-            style: {
-              fontFamily: '"Gochi Hand", cursive',
-              fontSize: 22, color: PENCIL_GRAY, opacity: .8, maxWidth: 360,
-            },
-          },
-            'fill out the worksheet on the right.', React.createElement('br'),
-            'pick a tone with the dial on the left.', React.createElement('br'),
-            'the chicken will write the letter.'
-          )
-        ),
-
-        empty && busy && React.createElement('div', {
-          style: {
-            flex: 1, display: 'flex', flexDirection: 'column',
-            alignItems: 'center', justifyContent: 'center',
-            textAlign: 'center', color: CRAYON[rage].main,
-          },
-        },
-          React.createElement('div', {
-            style: { fontFamily: '"Gochi Hand", cursive', fontSize: 32 },
-          }, 'the chicken is writing…'),
-          React.createElement('div', {
-            style: {
-              marginTop: 12, fontFamily: '"Gochi Hand", cursive',
-              fontSize: 20, color: PENCIL_GRAY, opacity: .7,
-            },
-          }, '(give it a moment)')
-        ),
-
-        !empty && React.createElement(React.Fragment, null,
-          React.createElement('div', { style: { flex: 1, overflow: 'auto' } },
-            React.createElement(StreamedCrayon, { text: letter, rage, version, fontSize: 22 })
-          ),
-          React.createElement(LetterActions, {
-            rage, letter, busy,
-            onCopy, onRegenerate, onSave, onEmail, onStartOver,
-          })
-        )
+        }),
+        React.createElement(LetterBody, {
+          rage, letter, version, busy,
+          onCopy, onRegenerate, onSave, onEmail, onStartOver,
+        })
       )
     ),
     React.createElement(PaperPlane, { show: planeFlash })

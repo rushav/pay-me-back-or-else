@@ -14,6 +14,7 @@ from pathlib import Path
 import streamlit as st
 import streamlit.components.v1 as components
 
+from components.background import background_js
 from components.form import form_js
 from components.history import history_js
 from components.letter_paper import letter_paper_js
@@ -55,6 +56,9 @@ def _styles_css() -> str:
 
 def _init_state() -> None:
     ss = st.session_state
+    # View persists in the URL so a hard refresh restores the same view.
+    qp_view = st.query_params.get("view")
+    ss.setdefault("view", qp_view if qp_view in ("landing", "app") else "landing")
     ss.setdefault("rage_level", 1)
     ss.setdefault("form_data", {
         "debtor_name": "",
@@ -112,7 +116,13 @@ def _handle_action(payload: dict) -> None:
     st.session_state["last_action_nonce"] = nonce
 
     action = payload.get("action")
-    if action == "set_rage":
+    if action == "set_view":
+        view = payload.get("view")
+        if view in ("landing", "app"):
+            st.session_state["view"] = view
+            st.query_params["view"] = view
+
+    elif action == "set_rage":
         st.session_state["rage_level"] = int(payload.get("rage", 1))
         st.session_state["form_data"]["rage_level"] = st.session_state["rage_level"]
 
@@ -164,29 +174,27 @@ def _handle_action(payload: dict) -> None:
         st.session_state["api_error"] = None
 
 
-# ── Desk background (rendered outside the iframe) ─────────────
-
-def _render_desk(desk_uri: str) -> None:
-    st.markdown(
-        f'<style>{_styles_css()}</style>'
-        f'<div class="pmb-desk" style="background-image:url({desk_uri});"></div>',
-        unsafe_allow_html=True,
-    )
-
-
 # ── Iframe HTML assembly ──────────────────────────────────────
 
 APP_JS_TEMPLATE = r"""
 window.CHICKEN_IMGS = __CHICKEN_IMGS__;
 window.T_IMGS = __T_IMGS__;
 window.DRAWING_IMGS = __DRAWING_IMGS__;
+window.DESK_SRC = __DESK_SRC__;
 
 // Use shared list names used by components.
 const CHICKEN_IMGS = window.CHICKEN_IMGS;
 const T_IMGS = window.T_IMGS;
 const DRAWING_IMGS = window.DRAWING_IMGS;
+const DESK_SRC = window.DESK_SRC;
+
+// Fixed design-space stage. Everything is positioned in these 1440x900
+// coordinates, then the stage is scaled to fit the viewport (letterbox).
+const STAGE_W = 1440;
+const STAGE_H = 900;
 
 __SHARED__
+__BACKGROUND__
 __MASCOT__
 __RAGE_METER__
 __FORM__
@@ -205,6 +213,24 @@ function App() {
   const [savedFlash, setSavedFlash] = useState(!!initial.flash_saved);
   const [planeFlash, setPlaneFlash] = useState(!!initial.flash_plane);
   const [apiError, setApiError] = useState(initial.api_error || null);
+  const [view, setView] = useState(initial.view || 'landing');
+  const [animateZoom, setAnimateZoom] = useState(false);
+
+  const stageRef = useRef(null);
+
+  // Scale the fixed 1440x900 stage to fit the viewport (letterbox).
+  useEffect(() => {
+    const fit = () => {
+      const el = stageRef.current;
+      if (!el) return;
+      const s = Math.min(window.innerWidth / STAGE_W, window.innerHeight / STAGE_H);
+      el.style.transform = `scale(${s})`;
+      setFrameHeight();
+    };
+    fit();
+    window.addEventListener('resize', fit);
+    return () => window.removeEventListener('resize', fit);
+  }, []);
 
   // Saved/plane animations are one-shot.
   useEffect(() => {
@@ -229,6 +255,20 @@ function App() {
   const changeRage = (r) => {
     setRage(r);
     sendToStreamlit({ action: 'set_rage', rage: r });
+  };
+
+  // Landing → app: play the zoom locally, then persist the view once the
+  // 700ms transform finishes (so a refresh restores 'app' pre-zoomed).
+  const enterApp = () => {
+    if (view === 'app') return;
+    setAnimateZoom(true);
+    setView('app');
+  };
+
+  const onCameraEnd = (e) => {
+    if (e.propertyName === 'transform' && view === 'app') {
+      sendToStreamlit({ action: 'set_view', view: 'app' });
+    }
   };
 
   const submitForm = () => {
@@ -276,117 +316,152 @@ function App() {
   };
 
   const showLetter = letter || '';
-  const showBusy = busy && !showLetter;
   const letters = initial.letters || [];
 
+  // Camera (desk) zoom + per-view fade helpers. Transitions are enabled only
+  // after a real CTA click (animateZoom) so reruns/refresh render instantly.
+  const camStyle = {
+    position: 'absolute', inset: 0, zIndex: 0,
+    transformOrigin: '680px 450px',
+    transform: view === 'app' ? 'scale(2)' : 'scale(1)',
+    transition: animateZoom ? 'transform 700ms cubic-bezier(.66,0,.34,1)' : 'none',
+    willChange: 'transform',
+  };
+  const landing = (extra) => ({
+    opacity: view === 'landing' ? 1 : 0,
+    transition: animateZoom ? 'opacity 280ms ease' : 'none',
+    pointerEvents: view === 'landing' ? 'auto' : 'none',
+    ...extra,
+  });
+  const appUI = (extra) => ({
+    opacity: view === 'app' ? 1 : 0,
+    transition: animateZoom ? 'opacity 380ms ease 320ms' : 'none',
+    pointerEvents: view === 'app' ? 'auto' : 'none',
+    ...extra,
+  });
+
   return React.createElement('div', {
+    // Viewport: fills the iframe, centers + letterboxes the stage.
+    style: {
+      position: 'fixed', inset: 0, overflow: 'hidden',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      background: 'transparent',
+    },
+  },
+   React.createElement('div', {
+    // Stage: fixed 1440x900 design space, scaled to fit via stageRef effect.
+    ref: stageRef,
     style: {
       position: 'relative',
-      width: '100vw', minHeight: '100vh',
+      width: STAGE_W, height: STAGE_H,
+      flex: '0 0 auto',
       overflow: 'hidden',
     },
   },
-    // Header
-    React.createElement('div', {
-      style: {
-        position: 'absolute', top: 18, left: 0, right: 0,
-        padding: '0 40px', zIndex: 2, pointerEvents: 'none',
+    // ── Camera / desk layer (the only thing that zooms) ──
+    React.createElement('div', { style: camStyle, onTransitionEnd: onCameraEnd },
+      React.createElement(Desk),
+
+      // View 1: worksheet prop — the zoom target, centered on the stage.
+      React.createElement('div', {
+        style: landing({ position: 'absolute', left: 560, top: 250, width: 320, height: 400, zIndex: 1, transform: 'rotate(2deg)' }),
       },
+        React.createElement(KidPaper, { width: 320, height: 400, seed: 11, tone: PAPER_BG_ALT, rotation: 0 },
+          React.createElement('div', {
+            style: { position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8 },
+          },
+            React.createElement('div', { style: { fontFamily: '"Gochi Hand", cursive', fontSize: 32, color: CRAYON_NAVY } }, 'the demand'),
+            React.createElement('div', { style: { fontFamily: '"Gochi Hand", cursive', fontSize: 17, color: PENCIL_GRAY, opacity: .7 } }, '(blank worksheet)')
+          )
+        )
+      ),
+
+      // View 1: kid's drawing prop resting on the desk.
+      React.createElement('div', {
+        style: landing({ position: 'absolute', left: 300, top: 560, zIndex: 1, transform: 'rotate(-6deg)' }),
+      },
+        React.createElement(Drawing, { rage, width: 220 })
+      )
+    ),
+
+    // ── UI layer (fixed; does not zoom) ──
+
+    // Landing: brand title.
+    React.createElement('div', {
+      style: landing({ position: 'absolute', top: 70, left: 0, right: 0, padding: '0 40px', zIndex: 5 }),
     },
       React.createElement(BrandHeader),
       React.createElement('div', {
         style: {
           marginTop: 10, height: 1,
           width: 'min(700px, 60%)', margin: '12px auto 0',
-          background: 'linear-gradient(to right, transparent, rgba(20,12,4,.35), transparent)',
+          background: 'linear-gradient(to right, transparent, rgba(20,12,4,.45), transparent)',
         },
       })
     ),
 
+    // Landing: call-to-action → zoom into the app.
+    React.createElement('div', {
+      style: landing({ position: 'absolute', left: 600, top: 690, width: 240, zIndex: 6, display: 'flex', justifyContent: 'center' }),
+    },
+      React.createElement(LandingCTA, { onClick: enterApp })
+    ),
+
+    // App: API error banner.
     apiError && React.createElement('div', {
-      style: {
-        position: 'absolute', top: 8, left: '50%',
-        transform: 'translateX(-50%)',
-        background: '#fff3cd', color: '#664d03',
-        border: '1px solid #ffe69c', borderRadius: 6,
-        padding: '6px 14px', fontFamily: '"Gochi Hand", cursive',
+      style: appUI({
+        position: 'absolute', top: 10, left: '50%', transform: 'translateX(-50%)',
+        background: '#fff3cd', color: '#664d03', border: '1px solid #ffe69c',
+        borderRadius: 6, padding: '6px 14px', fontFamily: '"Gochi Hand", cursive',
         fontSize: 16, zIndex: 100,
-      },
+      }),
     }, apiError),
 
-    // Top-left: rage meter sticky note
+    // App: rage meter left rail.
     React.createElement('div', {
-      style: { position: 'absolute', left: 24, top: 130, zIndex: 3 },
+      style: appUI({ position: 'absolute', left: 78, top: 175, zIndex: 4 }),
     },
       React.createElement(RageMeter, { rage, setRage: changeRage })
     ),
 
-    // Bottom-left: chicken peeking up. z-index above letter so chicken overlaps.
+    // App: worksheet center (form + streamed letter on one paper).
     React.createElement('div', {
-      style: {
-        position: 'absolute',
-        left: -140, bottom: 0,
-        width: 1120, height: 580,
-        overflow: 'hidden', pointerEvents: 'none',
-        zIndex: 10,
-      },
+      style: appUI({ position: 'absolute', left: 262, top: 60, zIndex: 5 }),
     },
-      React.createElement(Chicken, {
-        rage, width: 1120,
-        style: {
-          position: 'absolute', left: 0, top: 0, width: 1120,
-          transform: 'scaleX(1.3) translateY(10%)',
-          transformOrigin: 'center top',
-        },
-      })
-    ),
-
-    // Bottom-right: kid's drawing prop sitting on the desk.
-    React.createElement('div', {
-      style: {
-        position: 'absolute',
-        right: 48, bottom: 28,
-        width: 300, pointerEvents: 'none',
-        zIndex: 3,
-      },
-    },
-      React.createElement(Drawing, { rage, width: 300 })
-    ),
-
-    // Center: letter paper
-    React.createElement('div', {
-      style: {
-        position: 'absolute',
-        left: '50%', top: 152,
-        transform: 'translateX(-50%)', zIndex: 4,
-      },
-    },
-      React.createElement(LetterPaper, {
-        rage, letter: showLetter, version: letterVersion,
-        busy: showBusy,
+      React.createElement(Worksheet, {
+        rage, values, onChange: setValues,
+        onSubmit: submitForm, errors, busy,
+        letter: showLetter, version: letterVersion,
         onCopy: copyLetter, onRegenerate: regenerate,
         onSave: save, onEmail: sendEmail, onStartOver: startOver,
         savedFlash, planeFlash,
       })
     ),
 
-    // Right rail: worksheet form
+    // App: chicken on the right, reacting to the rage.
     React.createElement('div', {
-      style: {
-        position: 'absolute', right: 32, top: 130, zIndex: 4,
-      },
+      style: appUI({ position: 'absolute', left: 1060, top: 150, width: 300, height: 380, zIndex: 3 }),
     },
-      React.createElement(WorksheetForm, {
-        rage, values, onChange: setValues,
-        onSubmit: submitForm, errors, busy,
+      React.createElement(Chicken, {
+        rage, width: 300,
+        style: { position: 'absolute', left: 0, top: 0, width: 300 },
       })
     ),
 
-    // Top-right: hall of grudges (draggable)
-    React.createElement(HallStickyNote, {
+    // App: kid's drawing prop, bottom-right.
+    React.createElement('div', {
+      style: appUI({ position: 'absolute', left: 1085, top: 545, width: 260, zIndex: 3, transform: 'rotate(4deg)' }),
+    },
+      React.createElement(Drawing, { rage, width: 260 })
+    ),
+
+    // App: hall of grudges drawer (bottom-left, self-positioned).
+    React.createElement(HallDrawer, {
       currentRage: rage, letters,
       onDelete: (id) => sendToStreamlit({ action: 'delete', id }),
+      active: view === 'app', animate: animateZoom,
     })
+   )
   );
 }
 
@@ -409,6 +484,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(
 
 def _build_iframe_html(state: dict, assets: dict) -> str:
     initial_state = {
+        "view":               state["view"],
         "rage_level":         state["rage_level"],
         "form_data":          state["form_data"],
         "generated_letter":   state["generated_letter"],
@@ -435,7 +511,9 @@ def _build_iframe_html(state: dict, assets: dict) -> str:
         .replace("__CHICKEN_IMGS__", json.dumps(assets["chicken"]))
         .replace("__T_IMGS__", json.dumps(assets["therm"]))
         .replace("__DRAWING_IMGS__", json.dumps(assets["drawing"]))
+        .replace("__DESK_SRC__", json.dumps(assets["desk"]))
         .replace("__SHARED__", shared_js())
+        .replace("__BACKGROUND__", background_js())
         .replace("__MASCOT__", mascot_js())
         .replace("__RAGE_METER__", rage_meter_js())
         .replace("__FORM__", form_js())
@@ -498,9 +576,10 @@ def main() -> None:
     _init_state()
     ss = st.session_state
 
-    # Desk background (outside the iframe).
     assets = _asset_uris()
-    _render_desk(assets["desk"])
+    # Page-chrome reset + neutral fill behind the letterboxed stage. The desk
+    # itself now lives inside the iframe (it's the zoomable camera layer).
+    st.markdown(f"<style>{_styles_css()}</style>", unsafe_allow_html=True)
 
     # data-rage attribute on the page body for any external CSS hooks.
     st.markdown(
@@ -516,6 +595,7 @@ def main() -> None:
 
     html = _build_iframe_html(
         state={
+            "view":              ss["view"],
             "rage_level":        ss["rage_level"],
             "form_data":         ss["form_data"],
             "generated_letter":  ss["generated_letter"],

@@ -1,4 +1,4 @@
-"""Rage meter sticky note — thermometer + 4-tile segmented bar."""
+"""Rage meter — left-rail thermometer + compact 4-tile tone selector."""
 
 
 def rage_meter_js() -> str:
@@ -42,7 +42,7 @@ function ActiveTileRing({ color, seed }) {
 
 function NakedRageTiles({ rage, setRage }) {
   return React.createElement('div', {
-    style: { display: 'flex', flexDirection: 'column', gap: 4, width: '100%' },
+    style: { display: 'flex', flexDirection: 'column', gap: 2, width: '100%' },
   },
     RAGE_TIERS.map((t) => {
       const active = rage === t.rage;
@@ -55,25 +55,25 @@ function NakedRageTiles({ rage, setRage }) {
         style: {
           position: 'relative',
           background: 'transparent', border: 'none',
-          padding: '7px 12px', cursor: 'pointer',
+          padding: '5px 8px', cursor: 'pointer',
           textAlign: 'left',
           fontFamily: '"Gochi Hand", cursive',
           color: active ? c.main : '#3a3530',
           opacity: active ? 1 : 0.62,
           transition: 'opacity .15s, color .15s, transform .15s',
-          display: 'flex', alignItems: 'baseline', gap: 8,
+          display: 'flex', alignItems: 'baseline', gap: 6,
           transform: active ? 'translateX(2px)' : 'none',
         },
         onMouseEnter: (e) => { if (!active) e.currentTarget.style.opacity = 0.85; },
         onMouseLeave: (e) => { if (!active) e.currentTarget.style.opacity = 0.62; },
       },
         React.createElement('span', {
-          style: { fontSize: 14, opacity: .55, minWidth: 14 },
+          style: { fontSize: 12, opacity: .55, minWidth: 10 },
         }, t.rage),
         React.createElement('span', {
           style: {
-            fontSize: 19, fontWeight: active ? 700 : 400,
-            letterSpacing: '.4px', lineHeight: 1.1, flex: 1,
+            fontSize: 14, fontWeight: active ? 700 : 400,
+            letterSpacing: '.3px', lineHeight: 1.05, flex: 1,
           },
         }, t.label),
         active && React.createElement(ActiveTileRing, { color: c.main, seed: t.rage * 17 + 5 })
@@ -82,36 +82,37 @@ function NakedRageTiles({ rage, setRage }) {
   );
 }
 
+// Left rail: thermometer (the rage gauge) over a compact tone selector.
 function RageMeter({ rage, setRage }) {
-  const W = 300, H = 480;
+  const W = 152, H = 548;
   return React.createElement(KidPaper, {
     width: W, height: H, seed: 47, tone: PAPER_BG_ALT, rotation: -1.6,
   },
     React.createElement('div', {
       style: {
         position: 'absolute', inset: 0,
-        padding: '22px 20px 22px',
+        padding: '16px 12px 18px',
         boxSizing: 'border-box',
         display: 'flex', flexDirection: 'column',
-        alignItems: 'center', gap: 10,
+        alignItems: 'center', gap: 6,
       },
     },
       React.createElement('div', {
         style: {
           fontFamily: '"Gochi Hand", cursive',
-          fontSize: 28, color: CRAYON_NAVY,
+          fontSize: 24, color: CRAYON_NAVY,
           lineHeight: 1, letterSpacing: '.5px',
         },
-      }, 'the rage meter'),
+      }, 'the rage'),
       React.createElement('div', {
         style: { display: 'flex', justifyContent: 'center', alignItems: 'center', flex: '0 0 auto' },
       },
-        React.createElement(Thermometer, { rage, width: 120 })
+        React.createElement(Thermometer, { rage, width: 96 })
       ),
       React.createElement('div', {
         style: {
           fontFamily: '"Gochi Hand", cursive',
-          fontSize: 17, color: PENCIL_GRAY, opacity: .85, marginTop: -4,
+          fontSize: 14, color: PENCIL_GRAY, opacity: .85, marginTop: -2,
         },
       }, 'pick a tone ↓'),
       React.createElement('div', {
