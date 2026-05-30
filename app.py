@@ -6,7 +6,9 @@ session state and the Claude API call; the iframe owns the visual scene and
 talks back via the standard component setComponentValue protocol.
 """
 
+import base64
 import json
+import mimetypes
 import sys
 from pathlib import Path
 
@@ -27,22 +29,38 @@ from utils.validators import validate_form
 REPO_ROOT = Path(__file__).resolve().parent
 DESIGN_DIR = REPO_ROOT / "design"
 ASSETS_DIR = REPO_ROOT / "assets"
+STATIC_DIR = REPO_ROOT / "static"
 
 
 # ── Asset loading ─────────────────────────────────────────────
 #
-# Assets are served via Streamlit static file serving (./static, exposed at
-# <app>/app/static/<file>) rather than base64-embedded into the iframe. This
-# keeps the component HTML tiny — a large base64 srcdoc fails to render on
-# Streamlit Community Cloud (blank page), while rendering fine locally.
+# Assets are embedded as base64 data: URLs inline in the iframe HTML.
+#
+# We previously used Streamlit static serving (./static at /app/static/),
+# but the iframe is now srcdoc'd inside the pmb_component harness — and
+# srcdoc iframes have a null origin, so relative paths and even absolute
+# /app/static/ URLs can't resolve (window.top.location throws cross-origin
+# on Streamlit Cloud's split-domain deploy). Inlining bytes sidesteps origin
+# entirely: data: URLs work in any iframe regardless of origin policy.
+#
+# Total payload after main_table.jpg compression is ~1 MB raw → ~1.4 MB
+# base64, which is acceptable. Cached so the encoding cost is paid once.
 
 
-def _asset_files() -> dict:
+@st.cache_resource(show_spinner=False)
+def _asset_data_urls() -> dict:
+    def url(name: str) -> str:
+        path = STATIC_DIR / name
+        mime, _ = mimetypes.guess_type(path.name)
+        if mime is None:
+            mime = "application/octet-stream"
+        b64 = base64.b64encode(path.read_bytes()).decode("ascii")
+        return f"data:{mime};base64,{b64}"
     return {
-        "desk":     "main_table.png",
-        "chicken":  [f"chicken{i}-removebg-preview.png" for i in (1, 2, 3, 4)],
-        "therm":    [f"T{i}-removebg-preview.png" for i in (1, 2, 3, 4)],
-        "drawing":  [f"drawing{i}-removebg-preview.png" for i in (1, 2, 3, 4)],
+        "desk":     url("main_table.jpg"),
+        "chicken":  [url(f"chicken{i}-removebg-preview.png") for i in (1, 2, 3, 4)],
+        "therm":    [url(f"T{i}-removebg-preview.png") for i in (1, 2, 3, 4)],
+        "drawing":  [url(f"drawing{i}-removebg-preview.png") for i in (1, 2, 3, 4)],
     }
 
 
@@ -197,27 +215,14 @@ def _handle_action(payload: dict) -> None:
 # ── Iframe HTML assembly ──────────────────────────────────────
 
 APP_JS_TEMPLATE = r"""
-window.CHICKEN_FILES = __CHICKEN_IMGS__;
-window.T_FILES = __T_IMGS__;
-window.DRAWING_FILES = __DRAWING_IMGS__;
-window.DESK_FILE = __DESK_SRC__;
-
-// Assets are fetched from Streamlit static serving, not base64-embedded.
-// Files live in ./static and are served at <streamlit-app>/app/static/<file>.
-// We're nested two iframes deep (Streamlit → pmb_component harness → us),
-// so use window.top to find the Streamlit page's URL. Same-origin chain
-// in normal deploys; fall back to a relative path if blocked.
-let STATIC_BASE;
-try {
-  const T = window.top.location;
-  STATIC_BASE = T.origin + T.pathname.replace(/\/+$/, '') + '/app/static/';
-} catch (e) {
-  STATIC_BASE = (window.location.origin || '') + '/app/static/';
-}
-const CHICKEN_IMGS = window.CHICKEN_FILES.map(function (f) { return STATIC_BASE + f; });
-const T_IMGS = window.T_FILES.map(function (f) { return STATIC_BASE + f; });
-const DRAWING_IMGS = window.DRAWING_FILES.map(function (f) { return STATIC_BASE + f; });
-const DESK_SRC = STATIC_BASE + window.DESK_FILE;
+// Assets are passed in pre-encoded as data: URLs (see _asset_data_urls in
+// app.py). They work in any iframe regardless of origin policy — important
+// because we now live inside a srcdoc iframe whose effective origin is
+// "null" and where /app/static/ URLs can't resolve.
+const CHICKEN_IMGS = __CHICKEN_IMGS__;
+const T_IMGS = __T_IMGS__;
+const DRAWING_IMGS = __DRAWING_IMGS__;
+const DESK_SRC = __DESK_SRC__;
 
 // Fixed design-space stage. Everything is positioned in these 1440x900
 // coordinates, then the stage is scaled to fit the viewport (letterbox).
@@ -645,7 +650,7 @@ def main() -> None:
     _init_state()
     ss = st.session_state
 
-    assets = _asset_files()
+    assets = _asset_data_urls()
     # Page-chrome reset + neutral fill behind the letterboxed stage. The desk
     # itself now lives inside the iframe (it's the zoomable camera layer).
     st.markdown(f"<style>{_styles_css()}</style>", unsafe_allow_html=True)
