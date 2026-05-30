@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>pmb harness</title>
+  <style>
+    html, body { margin: 0; padding: 0; height: 100%; background: transparent; overflow: hidden; }
+    iframe#inner { border: 0; width: 100%; height: 100vh; display: block; background: transparent; }
+  </style>
+</head>
+<body>
+  <iframe id="inner"
+          allow="clipboard-write *"
+          sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-modals">
+  </iframe>
+  <script>
+    // ── pmb_chicken declared-component harness ───────────────────────────
+    // Two responsibilities:
+    //   1. When Streamlit re-renders the component (new args), set the
+    //      inner iframe's srcdoc to the rendered HTML payload from Python.
+    //   2. Forward any postMessage from the inner iframe whose payload has
+    //      isStreamlitMessage=true up to the Streamlit parent — this is
+    //      what makes setComponentValue actually round-trip.
+    //
+    // The visible debug log helps confirm the bridge is alive when the
+    // user clicks submit and watches the terminal.
+
+    const inner = document.getElementById('inner');
+    let lastPayloadLen = 0;
+
+    window.addEventListener('message', function (event) {
+      if (!event.data) return;
+
+      // From Streamlit parent → us
+      if (event.source === window.parent && event.data.type === 'streamlit:render') {
+        const args = (event.data.args) || {};
+        const html = args.payload_html;
+        if (typeof html === 'string') {
+          if (html.length !== lastPayloadLen) {
+            console.log('[pmb-harness] re-srcdoc inner iframe, payload bytes=' + html.length);
+            lastPayloadLen = html.length;
+          }
+          inner.srcdoc = html;
+        }
+        return;
+      }
+
+      // From inner iframe → us; forward Streamlit-bound messages up
+      if (event.source !== window.parent && event.data.isStreamlitMessage) {
+        if (event.data.type === 'streamlit:setComponentValue') {
+          console.log('[pmb-harness] forwarding setComponentValue → parent', event.data.value && event.data.value.action);
+        }
+        window.parent.postMessage(event.data, '*');
+      }
+    });
+
+    // Tell Streamlit we're alive and ready for renders.
+    window.parent.postMessage({
+      isStreamlitMessage: true,
+      type: 'streamlit:componentReady',
+      apiVersion: 1,
+    }, '*');
+  </script>
+</body>
+</html>

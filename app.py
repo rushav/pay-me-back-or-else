@@ -7,10 +7,10 @@ talks back via the standard component setComponentValue protocol.
 """
 
 import json
+import sys
 from pathlib import Path
 
 import streamlit as st
-import streamlit.components.v1 as components
 
 from components.background import background_js
 from components.form import form_js
@@ -19,6 +19,7 @@ from components.letter_paper import letter_paper_js
 from components.mascot import mascot_js
 from components.rage_meter import rage_meter_js
 from components.shared import shared_js
+from pmb_component import render as pmb_render
 from services import claude_service, db_service
 from utils.validators import validate_form
 
@@ -93,15 +94,36 @@ def _generate_letter(form_data: dict, rage: int) -> None:
     st.session_state["generated_letter"] = None
     st.session_state["api_error"] = None
 
+    print(
+        f"[app] _generate_letter: calling stream_letter "
+        f"debtor={form_data.get('debtor_name')!r} rage={rage}",
+        file=sys.stderr, flush=True,
+    )
     chunks: list[str] = []
     try:
+        first = True
         for chunk in claude_service.stream_letter(merged):
+            if first:
+                print(
+                    f"[app] _generate_letter: first chunk received ({len(chunk)} chars)",
+                    file=sys.stderr, flush=True,
+                )
+                first = False
             chunks.append(chunk)
         full = "".join(chunks).strip()
+        print(
+            f"[app] _generate_letter: stream complete, {len(full)} chars total",
+            file=sys.stderr, flush=True,
+        )
         st.session_state["generated_letter"] = full or "(the chicken is speechless.)"
     except claude_service.MissingAPIKeyError as exc:
+        print(f"[app] _generate_letter: MissingAPIKeyError: {exc}", file=sys.stderr, flush=True)
         st.session_state["api_error"] = str(exc)
     except Exception as exc:  # noqa: BLE001 — user-facing error display
+        print(
+            f"[app] _generate_letter: failed: {type(exc).__name__}: {exc}",
+            file=sys.stderr, flush=True,
+        )
         st.session_state["api_error"] = f"the chicken couldn't reach claude: {exc}"
     finally:
         st.session_state["is_streaming"] = False
@@ -181,15 +203,16 @@ window.DRAWING_FILES = __DRAWING_IMGS__;
 window.DESK_FILE = __DESK_SRC__;
 
 // Assets are fetched from Streamlit static serving, not base64-embedded.
-// Files live in ./static and are served at <app>/app/static/<file>. The
-// srcdoc iframe is same-origin, so build absolute URLs from the parent
-// location (with a relative fallback if that read is ever blocked).
+// Files live in ./static and are served at <streamlit-app>/app/static/<file>.
+// We're nested two iframes deep (Streamlit → pmb_component harness → us),
+// so use window.top to find the Streamlit page's URL. Same-origin chain
+// in normal deploys; fall back to a relative path if blocked.
 let STATIC_BASE;
 try {
-  const L = window.parent.location;
-  STATIC_BASE = L.origin + L.pathname.replace(/\/+$/, '') + '/app/static/';
+  const T = window.top.location;
+  STATIC_BASE = T.origin + T.pathname.replace(/\/+$/, '') + '/app/static/';
 } catch (e) {
-  STATIC_BASE = 'app/static/';
+  STATIC_BASE = (window.location.origin || '') + '/app/static/';
 }
 const CHICKEN_IMGS = window.CHICKEN_FILES.map(function (f) { return STATIC_BASE + f; });
 const T_IMGS = window.T_FILES.map(function (f) { return STATIC_BASE + f; });
@@ -280,11 +303,17 @@ function App() {
   };
 
   const submitForm = () => {
+    console.log('[pmb-inner] submitForm fired', { rage, valuesKeys: Object.keys(values) });
     const localErrors = quickValidate(values);
-    if (localErrors.length) { setErrors(localErrors); return; }
+    if (localErrors.length) {
+      console.log('[pmb-inner] submitForm: client-side validation failed', localErrors);
+      setErrors(localErrors);
+      return;
+    }
     setErrors([]);
     setBusy(true);
     sendToStreamlit({ action: 'submit', form_data: values, rage });
+    console.log('[pmb-inner] submitForm: postMessage to harness dispatched');
   };
 
   const regenerate = () => {
@@ -650,11 +679,26 @@ def main() -> None:
     if ss["flash_plane"]:
         ss["flash_plane"] = False
 
-    component_value = components.html(html, height=1000, scrolling=False)
+    # Use the registered custom component (pmb_component) instead of
+    # streamlit.components.v1.html — the latter is render-only and silently
+    # drops the inner iframe's setComponentValue messages, which is why
+    # form submit appeared to hang forever on the deployed app.
+    component_value = pmb_render(payload_html=html, key="pmb_chicken")
 
     if isinstance(component_value, dict) and component_value.get("action"):
-        _handle_action(component_value)
-        st.rerun()
+        nonce = component_value.get("_nonce")
+        last_nonce = ss.get("last_action_nonce")
+        # Streamlit caches the component's last setComponentValue and returns
+        # it on every subsequent rerun — we must only dispatch + rerun when
+        # the nonce actually changes, otherwise the same action loops forever.
+        if nonce is None or nonce != last_nonce:
+            print(
+                f"[app] iframe → python: action={component_value.get('action')!r} "
+                f"nonce={nonce!r}",
+                file=sys.stderr, flush=True,
+            )
+            _handle_action(component_value)
+            st.rerun()
 
 
 main()

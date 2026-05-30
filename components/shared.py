@@ -225,22 +225,28 @@ function BrandHeader() {
   );
 }
 
-// ── Bridge to Streamlit (postMessage protocol used by st.components.v1.html) ──
+// ── Bridge to Streamlit (postMessage protocol) ───────────────────────
+// We live two iframes deep: Streamlit page → pmb_component harness
+// (declared component) → this inner iframe (srcdoc). window.parent here
+// is the harness, which forwards isStreamlitMessage payloads up to the
+// Streamlit page. window.top is the Streamlit page itself.
 function sendToStreamlit(value) {
-  window.parent.postMessage({
+  const payload = {
     isStreamlitMessage: true,
     type: 'streamlit:setComponentValue',
     value: { ...value, _nonce: Math.random() }, // force change detection
     dataType: 'json',
-  }, '*');
+  };
+  console.log('[pmb-inner] sendToStreamlit', value.action, payload.value._nonce);
+  window.parent.postMessage(payload, '*');
 }
 
 function setFrameHeight() {
-  // The iframe should fill the parent viewport so the stage can letterbox
-  // against it (no big black bands above/below). Same-origin iframe lets us
-  // read the parent's innerHeight; fall back to our own if blocked.
+  // Read the Streamlit page's viewport height so the component iframe can
+  // fill it (no black letterbox bars). window.top is same-origin in normal
+  // Streamlit deploys; fall back to our own height if the read is blocked.
   let h;
-  try { h = window.parent.innerHeight; } catch (e) { h = window.innerHeight; }
+  try { h = window.top.innerHeight; } catch (e) { h = window.innerHeight; }
   if (!h) h = window.innerHeight;
   window.parent.postMessage({
     isStreamlitMessage: true,
@@ -249,10 +255,11 @@ function setFrameHeight() {
   }, '*');
 }
 
-// When the parent viewport resizes, the iframe doesn't get its own resize
-// event — listen on the parent so we rescale + resize together.
+// When the Streamlit page resizes, this iframe doesn't get its own resize
+// event unless its dimensions actually change — listen on window.top so
+// we rescale + resize together.
 try {
-  window.parent.addEventListener('resize', setFrameHeight);
+  window.top.addEventListener('resize', setFrameHeight);
 } catch (e) { /* cross-origin: live with the initial height */ }
 
 window.parent.postMessage({
