@@ -270,12 +270,12 @@ function App() {
     const rescale = () => {
       const el = stageRef.current;
       if (!el) return;
-      // Math.max scales so the stage at least fills the viewport in both
-      // dimensions. Picks the larger of (vp_w/stage_w, vp_h/stage_h),
-      // which guarantees no horizontal bars — the desk extends edge to
-      // edge. The non-limiting axis may crop slightly; vertical crop is
-      // acceptable per the design brief, horizontal bars are not.
-      const s = Math.max(window.innerWidth / STAGE_W, window.innerHeight / STAGE_H);
+      // Scale-to-FIT (Math.min) so the whole stage stays inside the
+      // viewport in both dimensions — nothing is ever clipped at an
+      // edge. The shorter axis may letterbox; the bars are filled by
+      // the Streamlit page's cream (#efe4c6, desk-edge tone) showing
+      // through the transparent iframe chain.
+      const s = Math.min(window.innerWidth / STAGE_W, window.innerHeight / STAGE_H);
       el.style.transform = `scale(${s})`;
     };
     rescale();
