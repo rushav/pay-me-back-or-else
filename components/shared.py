@@ -236,17 +236,24 @@ function sendToStreamlit(value) {
 }
 
 function setFrameHeight() {
-  const h = Math.max(
-    document.documentElement.scrollHeight,
-    document.body.scrollHeight,
-    window.innerHeight
-  );
+  // The iframe should fill the parent viewport so the stage can letterbox
+  // against it (no big black bands above/below). Same-origin iframe lets us
+  // read the parent's innerHeight; fall back to our own if blocked.
+  let h;
+  try { h = window.parent.innerHeight; } catch (e) { h = window.innerHeight; }
+  if (!h) h = window.innerHeight;
   window.parent.postMessage({
     isStreamlitMessage: true,
     type: 'streamlit:setFrameHeight',
     height: h,
   }, '*');
 }
+
+// When the parent viewport resizes, the iframe doesn't get its own resize
+// event — listen on the parent so we rescale + resize together.
+try {
+  window.parent.addEventListener('resize', setFrameHeight);
+} catch (e) { /* cross-origin: live with the initial height */ }
 
 window.parent.postMessage({
   isStreamlitMessage: true,

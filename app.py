@@ -408,9 +408,33 @@ function App() {
       })
     ),
 
+    // Landing: short pitch right above the CTA, in crayon handwriting so
+    // it reads as part of the worksheet aesthetic and not site chrome.
+    React.createElement('div', {
+      style: landing({
+        position: 'absolute', left: 0, right: 0, top: 660,
+        zIndex: 6, display: 'flex', justifyContent: 'center',
+        pointerEvents: 'none',
+      }),
+    },
+      React.createElement('div', {
+        style: {
+          fontFamily: '"Gochi Hand", cursive',
+          fontSize: 20, lineHeight: 1.25,
+          color: '#2a221a', textAlign: 'center',
+          maxWidth: 560, padding: '0 12px',
+          textShadow: '0 1px 0 rgba(255,255,255,.55)',
+        },
+      },
+        'pick how angry you want to be.',
+        React.createElement('br'),
+        'the chicken writes the rest.'
+      )
+    ),
+
     // Landing: call-to-action → zoom into the app.
     React.createElement('div', {
-      style: landing({ position: 'absolute', left: 600, top: 690, width: 240, zIndex: 6, display: 'flex', justifyContent: 'center' }),
+      style: landing({ position: 'absolute', left: 0, right: 0, top: 740, zIndex: 6, display: 'flex', justifyContent: 'center' }),
     },
       React.createElement(LandingCTA, { onClick: enterApp })
     ),
@@ -425,9 +449,11 @@ function App() {
       }),
     }, apiError),
 
-    // App: rage meter left rail.
+    // App: rage meter left rail. Shifted left + up because the meter is now
+    // wider (208) and taller (648) — needs ~10px gap before the worksheet
+    // at x=262 and headroom inside the 900-tall stage.
     React.createElement('div', {
-      style: appUI({ position: 'absolute', left: 78, top: 175, zIndex: 4 }),
+      style: appUI({ position: 'absolute', left: 44, top: 140, zIndex: 4 }),
     },
       React.createElement(RageMeter, { rage, setRage: changeRage })
     ),

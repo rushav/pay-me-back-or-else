@@ -26,19 +26,30 @@ function LandingCTA({ onClick }) {
   return React.createElement('button', {
     type: 'button', 'data-no-drag': true, onClick,
     style: {
-      background: 'rgba(255,252,244,.93)', border: 'none', padding: 0,
-      cursor: 'pointer', borderRadius: 10,
-      boxShadow: '0 12px 26px rgba(20,12,4,.32)',
+      // Brighter paper-stock card so the CTA pops off the desk wood and
+      // reads as the primary action. The hover lift now has a transition
+      // so it actually animates instead of snapping.
+      background: 'rgba(255,250,235,1)', border: 'none', padding: 0,
+      cursor: 'pointer', borderRadius: 12,
+      boxShadow: '0 14px 30px rgba(20,12,4,.36), 0 2px 4px rgba(20,12,4,.22)',
+      transform: 'translateY(0)',
+      transition: 'transform 160ms ease, box-shadow 160ms ease',
     },
-    onMouseEnter: (e) => e.currentTarget.style.transform = 'translateY(-2px)',
-    onMouseLeave: (e) => e.currentTarget.style.transform = 'none',
+    onMouseEnter: (e) => {
+      e.currentTarget.style.transform = 'translateY(-3px)';
+      e.currentTarget.style.boxShadow = '0 18px 36px rgba(20,12,4,.42), 0 2px 4px rgba(20,12,4,.22)';
+    },
+    onMouseLeave: (e) => {
+      e.currentTarget.style.transform = 'translateY(0)';
+      e.currentTarget.style.boxShadow = '0 14px 30px rgba(20,12,4,.36), 0 2px 4px rgba(20,12,4,.22)';
+    },
   },
     React.createElement(RoughBox, {
-      stroke: CRAYON[3].main, strokeWidth: 3, seed: 91, padding: '16px 30px',
+      stroke: CRAYON[3].main, strokeWidth: 3.4, seed: 91, padding: '18px 38px',
     },
       React.createElement('span', {
         style: {
-          fontFamily: '"Gochi Hand", cursive', fontSize: 30,
+          fontFamily: '"Gochi Hand", cursive', fontSize: 34,
           color: CRAYON[3].main, letterSpacing: '.5px', whiteSpace: 'nowrap',
         },
       }, '✎ write a letter')

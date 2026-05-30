@@ -14,8 +14,10 @@ html, body, #root {
 }
 
 [data-testid="stAppViewContainer"] {
-  /* Neutral fill behind the letterboxed stage (desk now lives in the iframe). */
-  background: #15110c !important;
+  /* Neutral cream fill behind the letterboxed stage — matches the desk's
+     lighter edge tones so the letterbox bars blend in instead of reading
+     as harsh black bands. */
+  background: #efe4c6 !important;
 }
 
 [data-testid="stMain"] {

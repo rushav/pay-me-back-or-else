@@ -228,30 +228,33 @@ function LetterBody({ rage, letter, version, busy, onCopy, onRegenerate, onSave,
   );
 }
 
-// The merged worksheet: form fields + generated-letter area on ONE paper.
+// The merged worksheet: shows EITHER the form fields OR the streamed letter
+// on the same sheet of paper — never both. Pre-submit shows the form; once
+// the user submits (busy) or a letter exists, the form is replaced by the
+// letter view. "start over" clears the letter and brings the form back.
+// The two states cross-fade via opacity so the dimensions stay stable.
 function Worksheet({ rage, values, onChange, onSubmit, errors, busy,
                      letter, version, onCopy, onRegenerate, onSave, onEmail, onStartOver,
                      savedFlash, planeFlash }) {
   const W = 760, H = 780;
+  const showLetter = busy || !!letter;
+  const layer = (visible) => ({
+    position: 'absolute', inset: 0,
+    padding: '30px 40px 26px',
+    boxSizing: 'border-box',
+    display: 'flex', flexDirection: 'column', gap: 10,
+    overflow: 'hidden',
+    opacity: visible ? 1 : 0,
+    pointerEvents: visible ? 'auto' : 'none',
+    transition: 'opacity 250ms ease',
+  });
   return React.createElement('div', { style: { position: 'relative' } },
     React.createElement(SavedStamp, { show: savedFlash, rage }),
     React.createElement(KidPaper, { width: W, height: H, seed: 11, tone: PAPER_BG_ALT, rotation: 0.6 },
-      React.createElement('div', {
-        style: {
-          position: 'absolute', inset: 0,
-          padding: '30px 40px 26px',
-          boxSizing: 'border-box',
-          display: 'flex', flexDirection: 'column', gap: 10,
-          overflow: 'hidden',
-        },
-      },
-        React.createElement(WorksheetFormBody, { rage, values, onChange, onSubmit, errors, busy }),
-        React.createElement('div', {
-          style: {
-            flex: '0 0 auto', height: 1, margin: '2px 0',
-            background: 'repeating-linear-gradient(to right, rgba(60,40,10,.4) 0 6px, transparent 6px 10px)',
-          },
-        }),
+      React.createElement('div', { style: layer(!showLetter) },
+        React.createElement(WorksheetFormBody, { rage, values, onChange, onSubmit, errors, busy })
+      ),
+      React.createElement('div', { style: layer(showLetter) },
         React.createElement(LetterBody, {
           rage, letter, version, busy,
           onCopy, onRegenerate, onSave, onEmail, onStartOver,
