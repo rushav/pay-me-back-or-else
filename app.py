@@ -183,6 +183,13 @@ def _handle_action(payload: dict) -> str | None:
         view = payload.get("view")
         if view in ("landing", "app"):
             st.session_state["view"] = view
+            # The landing CTA validates age client-side before allowing the
+            # transition, so by the time set_view fires we know user_age is
+            # present and well-formed. Store it now so the prompt-side gate
+            # has it ready for the first submit.
+            age = _coerce_age(payload.get("user_age"))
+            if age is not None:
+                st.session_state["user_age"] = age
             # Intentionally NOT mirroring to st.query_params anymore —
             # that's what caused refresh-after-CTA to skip the landing
             # page. session_state alone keeps view stable across the
@@ -312,8 +319,14 @@ function App() {
   // displayed rage state by 1 (capped at 4). Decays to 0 after 3s of
   // no clicks. Purely visual; does NOT change the rage the user picked.
   const [pokes, setPokes] = useState(0);
+  // Age-input inline error (e.g. "please enter your age first"). Cleared
+  // automatically on focus or any successful gate pass.
+  const [ageError, setAgeError] = useState('');
 
   const stageRef = useRef(null);
+  // Decay timer for the chicken-poke counter. Held in a ref so it
+  // survives re-renders and we can clear it explicitly on each click.
+  const pokeTimerRef = useRef(null);
 
   // Scale the fixed 1440x900 stage to fit the viewport (letterbox).
   // rescale() is cheap and safe to fire on every iframe resize; the height
@@ -345,14 +358,11 @@ function App() {
     return () => clearTimeout(t);
   }, [savedFlash]);
 
-  // Chicken pokes decay back to 0 after 3 seconds of no clicks. Every
-  // click resets the timer (the effect re-runs because `pokes` changed),
-  // so rapid clicking compounds and only decays after the user stops.
-  useEffect(() => {
-    if (pokes === 0) return;
-    const t = setTimeout(() => setPokes(0), 3000);
-    return () => clearTimeout(t);
-  }, [pokes]);
+  // (Chicken-poke decay timer is now owned directly by pokeChicken below,
+  // using a ref. The prior useEffect-based approach was fragile if the
+  // iframe re-srcdoc'd mid-window — the new mount started fresh at
+  // pokes=0 but the displayed-rage calculation in the previous mount
+  // could leave the chicken visibly "stuck" for the user.)
 
   // One late re-measure after layout settles (fonts, async images). This
   // used to have no dep array — it fired on EVERY render and queued two
@@ -371,17 +381,28 @@ function App() {
     setRage(r);
   };
 
-  // Landing → app: play the zoom locally, then persist the view once the
-  // 700ms transform finishes (so a refresh restores 'app' pre-zoomed).
+  // Landing → app: validate age first, then play the zoom locally and
+  // persist the view + age once the 700ms transform finishes. Empty or
+  // invalid age blocks the transition and shows an inline crayon error.
   const enterApp = () => {
     if (view === 'app') return;
+    const trimmed = (userAge || '').trim();
+    const age = parseInt(trimmed, 10);
+    if (!trimmed || isNaN(age) || age < 1 || age > 120) {
+      setAgeError('please enter your age first');
+      return;
+    }
+    setAgeError('');
     setAnimateZoom(true);
     setView('app');
   };
 
   const onCameraEnd = (e) => {
     if (e.propertyName === 'transform' && view === 'app') {
-      sendToStreamlit({ action: 'set_view', view: 'app' });
+      // Persist both view AND the age the user typed — by the time we
+      // dispatch set_view we've already validated, so user_age is non-
+      // empty and Python's _coerce_age will accept it.
+      sendToStreamlit({ action: 'set_view', view: 'app', user_age: userAge });
     }
   };
 
@@ -434,9 +455,18 @@ function App() {
     sendToStreamlit({ action: 'start_over' });
   };
 
-  // Chicken poke: bump local poke counter; decays in 3s via the effect.
+  // Chicken poke: bump local poke counter; reset decay timer to 3s.
   // Purely iframe-local — no Python round-trip — so the click is instant.
-  const pokeChicken = () => setPokes(p => p + 1);
+  // The timer is held in a ref so each click can explicitly clear the
+  // previous one (debounced decay) — this is what was broken before.
+  const pokeChicken = () => {
+    setPokes(p => Math.min(p + 1, 4));
+    if (pokeTimerRef.current) clearTimeout(pokeTimerRef.current);
+    pokeTimerRef.current = setTimeout(() => {
+      setPokes(0);
+      pokeTimerRef.current = null;
+    }, 3000);
+  };
   const displayedChickenRage = Math.min(rage + pokes, 4);
 
   const copyLetter = async () => {
@@ -538,36 +568,48 @@ function App() {
           'the chicken will ask.', React.createElement('br'),
           'you pick how nicely.'
         ),
-        // Age input — subtle crayon-underline field. Acts as a gate for
-        // profanity on rage 3/4 inside the prompt (handled server-side
-        // in claude_service.build_prompt).
+        // Age input — empty by default, placeholder doubles as the
+        // label so there's no confusion between placeholder text and a
+        // pre-filled value. Required to proceed (enterApp validates).
         React.createElement('div', {
-          style: { marginTop: 4, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 },
+          style: { marginTop: 6, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 },
         },
-          React.createElement('div', {
-            style: {
-              fontFamily: '"Gochi Hand", cursive',
-              fontSize: 17, color: CRAYON_NAVY, opacity: .85,
-            },
-          }, 'your age'),
-          React.createElement('div', { style: { position: 'relative', width: 110 } },
+          React.createElement('div', { style: { position: 'relative', width: 150 } },
             React.createElement('input', {
               type: 'text',
               inputMode: 'numeric',
               value: userAge,
-              onChange: (e) => setUserAge((e.target.value || '').replace(/[^0-9]/g, '').slice(0, 3)),
-              placeholder: '18',
+              onChange: (e) => {
+                const cleaned = (e.target.value || '').replace(/[^0-9]/g, '').slice(0, 3);
+                setUserAge(cleaned);
+                if (cleaned) setAgeError('');
+              },
+              onFocus: () => setAgeError(''),
+              placeholder: 'your age',
               'data-no-drag': true,
+              autoComplete: 'off',
+              autoCorrect: 'off',
+              spellCheck: false,
+              maxLength: 3,
               style: {
                 width: '100%', textAlign: 'center',
                 background: 'transparent', border: 'none', outline: 'none',
                 fontFamily: '"Gochi Hand", cursive',
                 fontSize: 22, color: PENCIL_GRAY, letterSpacing: '.5px',
                 padding: '2px 0',
+                cursor: 'text',
               },
             }),
             React.createElement(PencilUnderline, { seed: 23 })
-          )
+          ),
+          ageError && React.createElement('div', {
+            style: {
+              marginTop: 2,
+              fontFamily: '"Gochi Hand", cursive',
+              fontSize: 15, color: '#b51212',
+              textAlign: 'center', lineHeight: 1.1,
+            },
+          }, ageError)
         )
       ),
 

@@ -37,10 +37,21 @@ def _client() -> anthropic.Anthropic:
     return anthropic.Anthropic(api_key=api_key)
 
 
-ADULT_TONE_MODIFIER = (
-    ", uncensored, real profanity allowed (shit, fuck, damn, etc) used "
-    "for comedic emphasis, still funny not actually cruel, no slurs or "
-    "attacks on protected characteristics"
+RAGE3_ADULT_MODIFIER = (
+    ". The letter should sound genuinely fed-up and sweary. "
+    "Use real profanity (shit, damn, hell, ass, bullshit) "
+    "freely throughout — at least 2-3 times. This is an "
+    "adult writing to another adult. Drop the kid-gloves."
+)
+RAGE4_ADULT_MODIFIER = (
+    ". The letter should be completely unhinged and "
+    "heavily profane. Use uncensored profanity HEAVILY "
+    "throughout — fuck, shit, asshole, bullshit, etc. — at "
+    "least once per sentence on average. This is a person "
+    "who has snapped. Make it absurd and dramatic, with "
+    "real swears not censored ones. Comedic, not actually "
+    "threatening physical harm, but the language should "
+    "feel UNCENSORED."
 )
 
 
@@ -58,11 +69,18 @@ def build_prompt(
     rage_int = int(rage_level)
     tone = TONE_INSTRUCTIONS[rage_int]
 
-    # Age gate: profanity modifier applies ONLY at rage 3 / 4 AND when the
-    # user has self-declared an age >= 18. Blank, invalid, or <18 ages
-    # keep the comedic-but-clean default.
-    if rage_int in (3, 4) and isinstance(user_age, int) and user_age >= 18:
-        tone = tone + ADULT_TONE_MODIFIER
+    # Age gate: the profanity modifier is appended ONLY when both
+    # (a) rage is 3 or 4, AND
+    # (b) the user has self-declared an age >= 18.
+    # Blank, invalid, or <18 ages keep the comedic-but-clean default.
+    # Earlier wording was too soft ("for comedic emphasis, still funny
+    # not actually cruel") and the model read that as a permission
+    # rather than an instruction — it kept staying polite. The split
+    # rage-3 vs rage-4 wording below is explicit about frequency.
+    if rage_int == 3 and isinstance(user_age, int) and user_age >= 18:
+        tone = tone + RAGE3_ADULT_MODIFIER
+    elif rage_int == 4 and isinstance(user_age, int) and user_age >= 18:
+        tone = tone + RAGE4_ADULT_MODIFIER
 
     extras = []
     if context.strip():

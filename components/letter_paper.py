@@ -219,17 +219,14 @@ function LetterBody({ rage, letter, version, busy, onCopy, onRegenerate, onSave,
 }
 
 // The merged worksheet: shows EITHER the form fields OR the streamed letter
-// on the same sheet of paper — never both. Pre-submit shows the form; once
-// the user submits (busy) or a letter exists, the form is replaced by the
-// letter view. "start over" clears the letter and brings the form back.
-// The two states cross-fade via opacity so the dimensions stay stable.
+// on the same area — never both. Pre-submit shows the form; once the user
+// submits (busy) or a letter exists, the form is replaced by the letter
+// view. "start over" clears the letter and brings the form back. The two
+// states cross-fade via opacity so the dimensions stay stable.
 //
-// The KidPaper backing is kept here as a "blended" sheet — the desk's
-// painted paper is far smaller than what a form+letter view needs, so we
-// can't remove the rendered paper entirely without overflowing onto the
-// wood grain (unreadable). We dim and feather the paper instead so it
-// reads as an extension of the painted sheet rather than an obvious
-// overlay rectangle.
+// The rendered paper backing has been removed — the container is now
+// fully transparent. The desk's painted paper shows through underneath
+// and the content sits invisibly bounded inside the 760×780 footprint.
 function Worksheet({ rage, values, onChange, onSubmit, errors, busy,
                      letter, version, onCopy, onRegenerate, onSave, onStartOver,
                      savedFlash }) {
@@ -245,26 +242,16 @@ function Worksheet({ rage, values, onChange, onSubmit, errors, busy,
     pointerEvents: visible ? 'auto' : 'none',
     transition: 'opacity 250ms ease',
   });
-  return React.createElement('div', { style: { position: 'relative', opacity: 0.92 } },
+  return React.createElement('div', { style: { position: 'relative', width: W, height: H } },
     React.createElement(SavedStamp, { show: savedFlash, rage }),
-    React.createElement(KidPaper, {
-      width: W, height: H, seed: 11,
-      // Lighter tone + lower-contrast drop-shadow makes the paper read as
-      // continuous with the desk's painted sheet rather than a separate
-      // overlay rectangle on the wood grain.
-      tone: 'rgba(248, 240, 215, 0.72)',
-      rotation: 0.6,
-      style: { filter: 'drop-shadow(0 6px 14px rgba(40,20,0,.12))' },
-    },
-      React.createElement('div', { style: layer(!showLetter) },
-        React.createElement(WorksheetFormBody, { rage, values, onChange, onSubmit, errors, busy })
-      ),
-      React.createElement('div', { style: layer(showLetter) },
-        React.createElement(LetterBody, {
-          rage, letter, version, busy,
-          onCopy, onRegenerate, onSave, onStartOver,
-        })
-      )
+    React.createElement('div', { style: layer(!showLetter) },
+      React.createElement(WorksheetFormBody, { rage, values, onChange, onSubmit, errors, busy })
+    ),
+    React.createElement('div', { style: layer(showLetter) },
+      React.createElement(LetterBody, {
+        rage, letter, version, busy,
+        onCopy, onRegenerate, onSave, onStartOver,
+      })
     )
   );
 }
