@@ -19,12 +19,32 @@ posted via ``streamlit:setComponentValue`` (a dict like
 ``{"action": "submit", "form_data": {...}, "rage": 3, "_nonce": …}``).
 """
 
+import sys
 from pathlib import Path
 
 import streamlit.components.v1 as components
 
 
 _FRONTEND_DIR = Path(__file__).resolve().parent / "frontend"
+
+# Defensive check at import time. If the frontend folder didn't ship with
+# the deploy (e.g. cleared by an aggressive .gitignore, missed in a build
+# step, or a stale CDN cache), declare_component would still succeed at
+# import but every render would silently 404 — the live page just goes
+# blank with no traceback. Logging the resolved path here makes the
+# next misconfiguration immediately visible in Streamlit Cloud's logs.
+if not (_FRONTEND_DIR / "index.html").exists():
+    print(
+        f"[pmb_component] FATAL: frontend not found at {_FRONTEND_DIR} "
+        f"(cwd={Path.cwd()}, __file__={__file__})",
+        file=sys.stderr, flush=True,
+    )
+else:
+    print(
+        f"[pmb_component] frontend resolved at {_FRONTEND_DIR}",
+        file=sys.stderr, flush=True,
+    )
+
 _pmb = components.declare_component("pmb_chicken", path=str(_FRONTEND_DIR))
 
 
