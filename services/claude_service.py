@@ -1,5 +1,7 @@
 """Claude API client for the chicken's tone-controlled letters."""
 
+import sys
+import traceback
 from collections.abc import Iterator
 
 import anthropic
@@ -69,7 +71,17 @@ Write the letter in lowercase (except for emphasis at higher rage levels), short
 
 
 def stream_letter(form_data: dict) -> Iterator[str]:
-    """Yield text chunks from Claude as they arrive."""
+    """Yield text chunks from Claude as they arrive.
+
+    Wraps the SDK call so any failure inside the streaming generator
+    (transport error, schema mismatch from a future-dated dependency, etc.)
+    is logged with a full traceback to stderr — Streamlit Cloud surfaces
+    stderr in the logs panel — and then re-raised as a clean RuntimeError
+    for the UI handler in app.py. Without this, silent dropouts inside the
+    generator left the UI stuck on "the chicken is writing…".
+    """
+    # _client() raises MissingAPIKeyError on its own; keep it outside the
+    # wrapper so the caller's specific handler still catches it cleanly.
     client = _client()
     prompt = build_prompt(
         name=form_data.get("debtor_name", ""),
@@ -82,13 +94,22 @@ def stream_letter(form_data: dict) -> Iterator[str]:
         payment_handle=form_data.get("payment_handle", ""),
     )
 
-    with client.messages.stream(
-        model=MODEL,
-        max_tokens=MAX_TOKENS,
-        messages=[{"role": "user", "content": prompt}],
-    ) as stream:
-        for text in stream.text_stream:
-            yield text
+    try:
+        with client.messages.stream(
+            model=MODEL,
+            max_tokens=MAX_TOKENS,
+            messages=[{"role": "user", "content": prompt}],
+        ) as stream:
+            for text in stream.text_stream:
+                yield text
+    except Exception as exc:
+        print(
+            f"[claude_service] stream_letter failed: {type(exc).__name__}: {exc}",
+            file=sys.stderr, flush=True,
+        )
+        traceback.print_exc(file=sys.stderr)
+        sys.stderr.flush()
+        raise RuntimeError(f"claude streaming failed: {type(exc).__name__}: {exc}") from exc
 
 
 def generate_letter(form_data: dict) -> str:
