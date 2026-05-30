@@ -167,9 +167,9 @@ def _handle_action(payload: dict) -> None:
             # page. session_state alone keeps view stable across the
             # in-session reruns; a true refresh resets it to "landing".
 
-    elif action == "set_rage":
-        st.session_state["rage_level"] = int(payload.get("rage", 1))
-        st.session_state["form_data"]["rage_level"] = st.session_state["rage_level"]
+    # 'set_rage' is intentionally not handled here — rage is iframe-local
+    # state and arrives with submit/regenerate when it actually matters.
+    # Suppressing it removes the per-tile-click rerun + page flicker.
 
     elif action == "update_form":
         st.session_state["form_data"].update(payload.get("form_data") or {})
@@ -270,7 +270,12 @@ function App() {
     const rescale = () => {
       const el = stageRef.current;
       if (!el) return;
-      const s = Math.min(window.innerWidth / STAGE_W, window.innerHeight / STAGE_H);
+      // Math.max scales so the stage at least fills the viewport in both
+      // dimensions. Picks the larger of (vp_w/stage_w, vp_h/stage_h),
+      // which guarantees no horizontal bars — the desk extends edge to
+      // edge. The non-limiting axis may crop slightly; vertical crop is
+      // acceptable per the design brief, horizontal bars are not.
+      const s = Math.max(window.innerWidth / STAGE_W, window.innerHeight / STAGE_H);
       el.style.transform = `scale(${s})`;
     };
     rescale();
@@ -302,8 +307,11 @@ function App() {
   }, []);
 
   const changeRage = (r) => {
+    // Rage lives entirely in iframe state. Sending it back to Python
+    // every click caused a full rerun → re-srcdoc → page flicker. The
+    // current rage is included in submit/regenerate payloads when those
+    // fire, so Python learns the rage at the moment it actually matters.
     setRage(r);
-    sendToStreamlit({ action: 'set_rage', rage: r });
   };
 
   // Landing → app: play the zoom locally, then persist the view once the
@@ -418,24 +426,61 @@ function App() {
       React.createElement(Desk),
 
       // View 1: worksheet prop — the zoom target, centered on the stage.
+      // Now carries the chicken mascot + descriptive copy. The placeholder
+      // "the demand / (blank worksheet)" text is gone; the page-bottom
+      // pitch is gone too — it all lives on the paper now.
       React.createElement('div', {
-        style: landing({ position: 'absolute', left: 560, top: 250, width: 320, height: 400, zIndex: 1, transform: 'rotate(2deg)' }),
+        style: landing({ position: 'absolute', left: 510, top: 180, width: 420, height: 520, zIndex: 1, transform: 'rotate(2deg)' }),
       },
-        React.createElement(KidPaper, { width: 320, height: 400, seed: 11, tone: PAPER_BG_ALT, rotation: 0 },
+        React.createElement(KidPaper, { width: 420, height: 520, seed: 11, tone: PAPER_BG_ALT, rotation: 0 },
           React.createElement('div', {
-            style: { position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8 },
+            style: {
+              position: 'absolute', inset: 0,
+              padding: '26px 28px 28px',
+              boxSizing: 'border-box',
+              display: 'flex', flexDirection: 'column',
+              alignItems: 'center', gap: 14,
+            },
           },
-            React.createElement('div', { style: { fontFamily: '"Gochi Hand", cursive', fontSize: 32, color: CRAYON_NAVY } }, 'the demand'),
-            React.createElement('div', { style: { fontFamily: '"Gochi Hand", cursive', fontSize: 17, color: PENCIL_GRAY, opacity: .7 } }, '(blank worksheet)')
+            // Angry chicken — visual centerpiece, sets the tone immediately.
+            React.createElement('img', {
+              src: CHICKEN_IMGS[3], alt: '', draggable: false,
+              style: {
+                width: 170, height: 'auto', display: 'block',
+                filter: 'drop-shadow(0 6px 12px rgba(0,0,0,.18))',
+                marginTop: -4,
+              },
+            }),
+            // Body copy in crayon. Lines break manually so the rag stays tidy.
+            React.createElement('div', {
+              style: {
+                fontFamily: '"Gochi Hand", cursive',
+                fontSize: 19, lineHeight: 1.32,
+                color: PENCIL_GRAY, textAlign: 'center',
+                letterSpacing: '.2px',
+              },
+            },
+              React.createElement('div', { style: { color: CRAYON_NAVY, marginBottom: 8 } },
+                'a tone-controlled', React.createElement('br'),
+                'debt-collection letter generator.'
+              ),
+              'someone owes you money.', React.createElement('br'),
+              "you don't want to ask.", React.createElement('br'),
+              React.createElement('span', { style: { display: 'inline-block', height: 8 } }),
+              React.createElement('br'),
+              'the chicken will ask.', React.createElement('br'),
+              'you pick how nicely.'
+            )
           )
         )
       ),
 
-      // View 1: kid's drawing prop resting on the desk.
+      // View 1: kid's drawing prop resting on the desk. Nudged left a touch
+      // so it doesn't crowd the (now wider) worksheet.
       React.createElement('div', {
-        style: landing({ position: 'absolute', left: 300, top: 560, zIndex: 1, transform: 'rotate(-6deg)' }),
+        style: landing({ position: 'absolute', left: 240, top: 580, zIndex: 1, transform: 'rotate(-6deg)' }),
       },
-        React.createElement(Drawing, { rage, width: 220 })
+        React.createElement(Drawing, { rage, width: 240 })
       )
     ),
 
@@ -455,31 +500,8 @@ function App() {
       })
     ),
 
-    // Landing: short pitch right above the CTA, in crayon handwriting so
-    // it reads as part of the worksheet aesthetic and not site chrome.
-    React.createElement('div', {
-      style: landing({
-        position: 'absolute', left: 0, right: 0, top: 660,
-        zIndex: 6, display: 'flex', justifyContent: 'center',
-        pointerEvents: 'none',
-      }),
-    },
-      React.createElement('div', {
-        style: {
-          fontFamily: '"Gochi Hand", cursive',
-          fontSize: 20, lineHeight: 1.25,
-          color: '#2a221a', textAlign: 'center',
-          maxWidth: 560, padding: '0 12px',
-          textShadow: '0 1px 0 rgba(255,255,255,.55)',
-        },
-      },
-        'pick how angry you want to be.',
-        React.createElement('br'),
-        'the chicken writes the rest.'
-      )
-    ),
-
-    // Landing: call-to-action → zoom into the app.
+    // Landing: call-to-action → zoom into the app. (Standalone descriptive
+    // copy that used to sit here has been moved onto the worksheet itself.)
     React.createElement('div', {
       style: landing({ position: 'absolute', left: 0, right: 0, top: 740, zIndex: 6, display: 'flex', justifyContent: 'center' }),
     },
@@ -496,18 +518,17 @@ function App() {
       }),
     }, apiError),
 
-    // App: rage meter left rail. Shifted left + up because the meter is now
-    // wider (208) and taller (648) — needs ~10px gap before the worksheet
-    // at x=262 and headroom inside the 900-tall stage.
+    // App: rage meter left rail. Card grew to 256×760; nudged to left:18
+    // to keep a small gap before the worksheet (its right edge sits at 274).
     React.createElement('div', {
-      style: appUI({ position: 'absolute', left: 44, top: 140, zIndex: 4 }),
+      style: appUI({ position: 'absolute', left: 18, top: 90, zIndex: 4 }),
     },
       React.createElement(RageMeter, { rage, setRage: changeRage })
     ),
 
     // App: worksheet center (form + streamed letter on one paper).
     React.createElement('div', {
-      style: appUI({ position: 'absolute', left: 262, top: 60, zIndex: 5 }),
+      style: appUI({ position: 'absolute', left: 288, top: 60, zIndex: 5 }),
     },
       React.createElement(Worksheet, {
         rage, values, onChange: setValues,
@@ -519,21 +540,23 @@ function App() {
       })
     ),
 
-    // App: chicken on the right, reacting to the rage.
+    // App: chicken on the right, reacting to the rage. Bigger, sits next
+    // to the (right-edge ~1048) worksheet with breathing room.
     React.createElement('div', {
-      style: appUI({ position: 'absolute', left: 1060, top: 150, width: 300, height: 380, zIndex: 3 }),
+      style: appUI({ position: 'absolute', left: 1060, top: 100, width: 360, height: 460, zIndex: 3 }),
     },
       React.createElement(Chicken, {
-        rage, width: 300,
-        style: { position: 'absolute', left: 0, top: 0, width: 300 },
+        rage, width: 360,
+        style: { position: 'absolute', left: 0, top: 0, width: 360 },
       })
     ),
 
-    // App: kid's drawing prop, bottom-right.
+    // App: kid's drawing prop, bottom-right. Larger so it doesn't read
+    // as a footnote next to the bigger chicken above it.
     React.createElement('div', {
-      style: appUI({ position: 'absolute', left: 1085, top: 545, width: 260, zIndex: 3, transform: 'rotate(4deg)' }),
+      style: appUI({ position: 'absolute', left: 1080, top: 555, width: 330, zIndex: 3, transform: 'rotate(4deg)' }),
     },
-      React.createElement(Drawing, { rage, width: 260 })
+      React.createElement(Drawing, { rage, width: 330 })
     ),
 
     // App: hall of grudges drawer (bottom-left, self-positioned).

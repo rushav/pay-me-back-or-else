@@ -135,6 +135,7 @@ function ActiveRing({ color, seed }) {
     React.createElement('path', {
       d: path.join(' ') + 'Z', fill: 'none', stroke: color,
       strokeWidth: '2.4', strokeLinecap: 'round', strokeLinejoin: 'round', opacity: '.9',
+      vectorEffect: 'non-scaling-stroke',
     })
   );
 }
@@ -172,6 +173,10 @@ function RoughBox({ children, stroke = '#1a1410', strokeWidth = 2.5, seed = 7, p
       React.createElement('path', {
         d: path.join(' ') + 'Z', fill: 'none', stroke,
         strokeWidth, strokeLinecap: 'round', strokeLinejoin: 'round',
+        // Without non-scaling-stroke the SVG's non-uniform scale (the
+        // viewBox is 100×100 but the rendered box is wide-and-short)
+        // makes vertical edges visibly thicker than horizontal ones.
+        vectorEffect: 'non-scaling-stroke',
       })
     ),
     React.createElement('span', { style: { position: 'relative' } }, children)

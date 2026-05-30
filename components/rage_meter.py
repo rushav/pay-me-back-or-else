@@ -36,6 +36,7 @@ function ActiveTileRing({ color, seed }) {
     React.createElement('path', {
       d: path.join(' ') + 'Z', fill: 'none', stroke: color,
       strokeWidth: '2.4', strokeLinecap: 'round', strokeLinejoin: 'round', opacity: '.9',
+      vectorEffect: 'non-scaling-stroke',
     })
   );
 }
@@ -82,11 +83,11 @@ function NakedRageTiles({ rage, setRage }) {
         },
       },
         React.createElement('span', {
-          style: { fontSize: 15, opacity: .6, minWidth: 14 },
+          style: { fontSize: 17, opacity: .6, minWidth: 16 },
         }, t.rage),
         React.createElement('span', {
           style: {
-            fontSize: 19, fontWeight: active ? 700 : 400,
+            fontSize: 22, fontWeight: active ? 700 : 400,
             letterSpacing: '.3px', lineHeight: 1.1, flex: 1,
           },
         }, t.label),
@@ -98,37 +99,37 @@ function NakedRageTiles({ rage, setRage }) {
 
 // Left rail: thermometer (the rage gauge) over a compact tone selector.
 function RageMeter({ rage, setRage }) {
-  // Bumped from 152x548 → 208x648 with a bigger thermometer and bigger
-  // tile labels so the meter pulls roughly as much eye as the worksheet.
-  const W = 208, H = 648;
+  // Bigger card + larger thermometer + larger tile labels so the meter
+  // reads as a primary interactive surface, not a side accessory.
+  const W = 256, H = 760;
   return React.createElement(KidPaper, {
     width: W, height: H, seed: 47, tone: PAPER_BG_ALT, rotation: -1.6,
   },
     React.createElement('div', {
       style: {
         position: 'absolute', inset: 0,
-        padding: '20px 16px 22px',
+        padding: '24px 18px 26px',
         boxSizing: 'border-box',
         display: 'flex', flexDirection: 'column',
-        alignItems: 'center', gap: 8,
+        alignItems: 'center', gap: 10,
       },
     },
       React.createElement('div', {
         style: {
           fontFamily: '"Gochi Hand", cursive',
-          fontSize: 32, color: CRAYON_NAVY,
+          fontSize: 38, color: CRAYON_NAVY,
           lineHeight: 1, letterSpacing: '.5px',
         },
       }, 'the rage'),
       React.createElement('div', {
         style: { display: 'flex', justifyContent: 'center', alignItems: 'center', flex: '0 0 auto' },
       },
-        React.createElement(Thermometer, { rage, width: 138 })
+        React.createElement(Thermometer, { rage, width: 170 })
       ),
       React.createElement('div', {
         style: {
           fontFamily: '"Gochi Hand", cursive',
-          fontSize: 18, color: PENCIL_GRAY, opacity: .9, marginTop: -2,
+          fontSize: 20, color: PENCIL_GRAY, opacity: .9, marginTop: -2,
         },
       }, '↓ pick a tone ↓'),
       React.createElement('div', {
