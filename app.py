@@ -95,16 +95,33 @@ def _init_state() -> None:
     ss.setdefault("letters", db_service.get_all_letters())
     ss.setdefault("validation_errors", [])
     ss.setdefault("last_action_nonce", None)
-    ss.setdefault("flash_saved", False)
-    ss.setdefault("flash_plane", False)
+    # user_age is the optional age-gate input from the landing worksheet;
+    # validated as a positive int (or None) in the submit handler.
+    ss.setdefault("user_age", None)
     ss.setdefault("api_error", None)
 
 
 # ── Action dispatch ───────────────────────────────────────────
 
-def _generate_letter(form_data: dict, rage: int) -> None:
+def _coerce_age(raw) -> int | None:
+    """Coerce a user-supplied age into a positive int, or None if invalid/blank.
+
+    None is the "under-18 default" — safer when a user leaves it blank;
+    the prompt-side age gate (claude_service.build_prompt) treats None
+    and <18 identically (no profanity modifier).
+    """
+    if raw is None or raw == "":
+        return None
+    try:
+        n = int(raw)
+    except (TypeError, ValueError):
+        return None
+    return n if n > 0 else None
+
+
+def _generate_letter(form_data: dict, rage: int, user_age: int | None = None) -> None:
     """Call Claude (streaming) and accumulate into session state."""
-    merged = {**form_data, "rage_level": rage}
+    merged = {**form_data, "rage_level": rage, "user_age": user_age}
     errors = validate_form(merged)
     if errors:
         st.session_state["validation_errors"] = errors
@@ -118,7 +135,7 @@ def _generate_letter(form_data: dict, rage: int) -> None:
 
     print(
         f"[app] _generate_letter: calling stream_letter "
-        f"debtor={form_data.get('debtor_name')!r} rage={rage}",
+        f"debtor={form_data.get('debtor_name')!r} rage={rage} age={user_age!r}",
         file=sys.stderr, flush=True,
     )
     chunks: list[str] = []
@@ -151,10 +168,14 @@ def _generate_letter(form_data: dict, rage: int) -> None:
         st.session_state["is_streaming"] = False
 
 
-def _handle_action(payload: dict) -> None:
+def _handle_action(payload: dict) -> str | None:
+    """Dispatch an iframe action. Returns 'no_rerun' if the caller should
+    deliberately NOT call st.rerun() afterwards (currently just `save`,
+    which would otherwise re-srcdoc the iframe and re-stream the letter).
+    """
     nonce = payload.get("_nonce")
     if nonce is not None and nonce == st.session_state.get("last_action_nonce"):
-        return
+        return None
     st.session_state["last_action_nonce"] = nonce
 
     action = payload.get("action")
@@ -179,29 +200,46 @@ def _handle_action(payload: dict) -> None:
         st.session_state["form_data"] = form
         rage = int(payload.get("rage", st.session_state["rage_level"]))
         st.session_state["rage_level"] = rage
-        _generate_letter(form, rage)
+        age = _coerce_age(payload.get("user_age"))
+        st.session_state["user_age"] = age
+        _generate_letter(form, rage, age)
 
     elif action == "regenerate":
         rage = int(payload.get("rage", st.session_state["rage_level"]))
-        _generate_letter(st.session_state["form_data"], rage)
+        age = _coerce_age(payload.get("user_age"))
+        if age is not None:
+            st.session_state["user_age"] = age
+        _generate_letter(st.session_state["form_data"], rage, st.session_state.get("user_age"))
 
     elif action == "save":
+        # Save is deliberately fire-and-forget: write to the DB but do
+        # NOT trigger a rerun. The iframe optimistically prepended the
+        # letter to its local hall list and flashed its own SAVED stamp,
+        # so a rerun here would only cause a re-srcdoc and re-stream of
+        # an already-displayed letter. ss["letters"] is not refreshed
+        # here either — main() pulls a fresh copy on every script run,
+        # so the next real rerun picks up this save naturally.
         letter = st.session_state.get("generated_letter")
         if letter:
+            payload_form = payload.get("form_data") or {}
+            saved_rage = int(payload.get("rage", st.session_state["rage_level"]))
             db_service.save_letter(
-                {**st.session_state["form_data"], "rage_level": st.session_state["rage_level"]},
+                {**st.session_state["form_data"], **payload_form, "rage_level": saved_rage},
                 letter,
             )
-            st.session_state["letters"] = db_service.get_all_letters()
-            st.session_state["flash_saved"] = True
+        return "no_rerun"
 
     elif action == "delete":
-        letter_id = int(payload.get("id"))
+        letter_id_raw = payload.get("id")
+        # Optimistic-save entries have ids like 'local-<timestamp>' and
+        # don't exist in the DB. Ignore them — the next refresh will
+        # drop the optimistic row in favor of the real one.
+        try:
+            letter_id = int(letter_id_raw)
+        except (TypeError, ValueError):
+            return None
         db_service.delete_letter(letter_id)
         st.session_state["letters"] = db_service.get_all_letters()
-
-    elif action == "email":
-        st.session_state["flash_plane"] = True
 
     elif action == "start_over":
         st.session_state["form_data"] = {
@@ -217,6 +255,7 @@ def _handle_action(payload: dict) -> None:
         st.session_state["is_streaming"] = False
         st.session_state["validation_errors"] = []
         st.session_state["api_error"] = None
+    return None
 
 
 # ── Iframe HTML assembly ──────────────────────────────────────
@@ -253,11 +292,26 @@ function App() {
   const [letterVersion, setLetterVersion] = useState(initial.letter_version || 0);
   const [busy, setBusy] = useState(!!initial.is_streaming);
   const [errors, setErrors] = useState(initial.validation_errors || []);
-  const [savedFlash, setSavedFlash] = useState(!!initial.flash_saved);
-  const [planeFlash, setPlaneFlash] = useState(!!initial.flash_plane);
+  // savedFlash is now triggered locally inside the iframe (no Python
+  // round-trip on Save), so it always starts false on a fresh mount.
+  const [savedFlash, setSavedFlash] = useState(false);
   const [apiError, setApiError] = useState(initial.api_error || null);
   const [view, setView] = useState(initial.view || 'landing');
   const [animateZoom, setAnimateZoom] = useState(false);
+  // letters: stored in local state (not just initial.letters) so Save can
+  // optimistically prepend a new entry without waiting for a Python rerun.
+  // On any other action that re-srcdocs the iframe, this is re-seeded from
+  // initial.letters which is the canonical DB state.
+  const [letters, setLetters] = useState(initial.letters || []);
+  // Age input (landing). Stored as a string while the user types; coerced
+  // to int and passed to Python in the submit payload.
+  const [userAge, setUserAge] = useState(
+    initial.user_age != null ? String(initial.user_age) : ''
+  );
+  // Chicken-poke counter: each click pokes the mascot, bumping its
+  // displayed rage state by 1 (capped at 4). Decays to 0 after 3s of
+  // no clicks. Purely visual; does NOT change the rage the user picked.
+  const [pokes, setPokes] = useState(0);
 
   const stageRef = useRef(null);
 
@@ -284,18 +338,21 @@ function App() {
     return () => window.removeEventListener('resize', rescale);
   }, []);
 
-  // Saved/plane animations are one-shot.
+  // SAVED stamp animation is one-shot.
   useEffect(() => {
     if (!savedFlash) return;
     const t = setTimeout(() => setSavedFlash(false), 1300);
     return () => clearTimeout(t);
   }, [savedFlash]);
 
+  // Chicken pokes decay back to 0 after 3 seconds of no clicks. Every
+  // click resets the timer (the effect re-runs because `pokes` changed),
+  // so rapid clicking compounds and only decays after the user stops.
   useEffect(() => {
-    if (!planeFlash) return;
-    const t = setTimeout(() => setPlaneFlash(false), 1500);
+    if (pokes === 0) return;
+    const t = setTimeout(() => setPokes(0), 3000);
     return () => clearTimeout(t);
-  }, [planeFlash]);
+  }, [pokes]);
 
   // One late re-measure after layout settles (fonts, async images). This
   // used to have no dep array — it fired on EVERY render and queued two
@@ -329,7 +386,7 @@ function App() {
   };
 
   const submitForm = () => {
-    console.log('[pmb-inner] submitForm fired', { rage, valuesKeys: Object.keys(values) });
+    console.log('[pmb-inner] submitForm fired', { rage, valuesKeys: Object.keys(values), hasAge: !!userAge });
     const localErrors = quickValidate(values);
     if (localErrors.length) {
       console.log('[pmb-inner] submitForm: client-side validation failed', localErrors);
@@ -338,26 +395,33 @@ function App() {
     }
     setErrors([]);
     setBusy(true);
-    sendToStreamlit({ action: 'submit', form_data: values, rage });
+    sendToStreamlit({ action: 'submit', form_data: values, rage, user_age: userAge });
     console.log('[pmb-inner] submitForm: postMessage to harness dispatched');
   };
 
   const regenerate = () => {
     setBusy(true);
-    sendToStreamlit({ action: 'regenerate', rage });
+    sendToStreamlit({ action: 'regenerate', rage, user_age: userAge });
   };
 
+  // Save: optimistic local update + SAVED stamp, plus a fire-and-forget
+  // dispatch to Python which writes to the DB but does NOT trigger a
+  // rerun (see app.py:_handle_action). This keeps the letter from
+  // re-streaming and the iframe from re-srcdoc'ing.
   const save = () => {
+    if (!letter) return;
     setSavedFlash(true);
-    sendToStreamlit({ action: 'save' });
-  };
-
-  const sendEmail = () => {
-    const subject = encodeURIComponent('A letter from the chicken');
-    const body = encodeURIComponent(letter);
-    setPlaneFlash(true);
-    window.open(`mailto:?subject=${subject}&body=${body}`, '_blank');
-    sendToStreamlit({ action: 'email' });
+    const amt = parseFloat(String(values.amount || '').replace(/^\$/, ''));
+    const local = {
+      id: 'local-' + Date.now(),
+      debtor_name: values.debtor_name || '',
+      amount: isNaN(amt) ? 0 : amt,
+      rage_level: rage,
+      letter_text: letter,
+      created_at: new Date().toISOString().replace('T', ' ').slice(0, 19),
+    };
+    setLetters(prev => [local, ...prev]);
+    sendToStreamlit({ action: 'save', form_data: values, rage });
   };
 
   const startOver = () => {
@@ -366,8 +430,14 @@ function App() {
     setBusy(false);
     setErrors([]);
     setApiError(null);
+    setPokes(0);
     sendToStreamlit({ action: 'start_over' });
   };
+
+  // Chicken poke: bump local poke counter; decays in 3s via the effect.
+  // Purely iframe-local — no Python round-trip — so the click is instant.
+  const pokeChicken = () => setPokes(p => p + 1);
+  const displayedChickenRage = Math.min(rage + pokes, 4);
 
   const copyLetter = async () => {
     try { await navigator.clipboard.writeText(letter); }
@@ -379,7 +449,6 @@ function App() {
   };
 
   const showLetter = letter || '';
-  const letters = initial.letters || [];
 
   // Camera (desk) zoom + per-view fade helpers. Transitions are enabled only
   // after a real CTA click (animateZoom) so reruns/refresh render instantly.
@@ -425,52 +494,79 @@ function App() {
     React.createElement('div', { style: camStyle, onTransitionEnd: onCameraEnd },
       React.createElement(Desk),
 
-      // View 1: worksheet prop — the zoom target, centered on the stage.
-      // Now carries the chicken mascot + descriptive copy. The placeholder
-      // "the demand / (blank worksheet)" text is gone; the page-bottom
-      // pitch is gone too — it all lives on the paper now.
+      // View 1: content sits DIRECTLY on the desk's painted paper — the
+      // rendered KidPaper rectangle is gone. The chicken, copy, and age
+      // input are layered onto the desk's existing sheet so we're not
+      // stacking two pieces of paper on top of each other.
       React.createElement('div', {
-        style: landing({ position: 'absolute', left: 510, top: 180, width: 420, height: 520, zIndex: 1, transform: 'rotate(2deg)' }),
+        style: landing({
+          position: 'absolute', left: 510, top: 180,
+          width: 420, height: 520, zIndex: 1,
+          transform: 'rotate(2deg)',
+          padding: '32px 30px 28px',
+          boxSizing: 'border-box',
+          display: 'flex', flexDirection: 'column',
+          alignItems: 'center', gap: 12,
+        }),
       },
-        React.createElement(KidPaper, { width: 420, height: 520, seed: 11, tone: PAPER_BG_ALT, rotation: 0 },
+        // Angry chicken — visual centerpiece, sets the tone immediately.
+        React.createElement('img', {
+          src: CHICKEN_IMGS[3], alt: '', draggable: false,
+          style: {
+            width: 170, height: 'auto', display: 'block',
+            filter: 'drop-shadow(0 6px 12px rgba(0,0,0,.18))',
+            marginTop: -4,
+          },
+        }),
+        // Body copy in crayon. Lines break manually so the rag stays tidy.
+        React.createElement('div', {
+          style: {
+            fontFamily: '"Gochi Hand", cursive',
+            fontSize: 19, lineHeight: 1.32,
+            color: PENCIL_GRAY, textAlign: 'center',
+            letterSpacing: '.2px',
+          },
+        },
+          React.createElement('div', { style: { color: CRAYON_NAVY, marginBottom: 6 } },
+            'a tone-controlled', React.createElement('br'),
+            'debt-collection letter generator.'
+          ),
+          'someone owes you money.', React.createElement('br'),
+          "you don't want to ask.", React.createElement('br'),
+          React.createElement('span', { style: { display: 'inline-block', height: 6 } }),
+          React.createElement('br'),
+          'the chicken will ask.', React.createElement('br'),
+          'you pick how nicely.'
+        ),
+        // Age input — subtle crayon-underline field. Acts as a gate for
+        // profanity on rage 3/4 inside the prompt (handled server-side
+        // in claude_service.build_prompt).
+        React.createElement('div', {
+          style: { marginTop: 4, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 },
+        },
           React.createElement('div', {
             style: {
-              position: 'absolute', inset: 0,
-              padding: '26px 28px 28px',
-              boxSizing: 'border-box',
-              display: 'flex', flexDirection: 'column',
-              alignItems: 'center', gap: 14,
+              fontFamily: '"Gochi Hand", cursive',
+              fontSize: 17, color: CRAYON_NAVY, opacity: .85,
             },
-          },
-            // Angry chicken — visual centerpiece, sets the tone immediately.
-            React.createElement('img', {
-              src: CHICKEN_IMGS[3], alt: '', draggable: false,
+          }, 'your age'),
+          React.createElement('div', { style: { position: 'relative', width: 110 } },
+            React.createElement('input', {
+              type: 'text',
+              inputMode: 'numeric',
+              value: userAge,
+              onChange: (e) => setUserAge((e.target.value || '').replace(/[^0-9]/g, '').slice(0, 3)),
+              placeholder: '18',
+              'data-no-drag': true,
               style: {
-                width: 170, height: 'auto', display: 'block',
-                filter: 'drop-shadow(0 6px 12px rgba(0,0,0,.18))',
-                marginTop: -4,
+                width: '100%', textAlign: 'center',
+                background: 'transparent', border: 'none', outline: 'none',
+                fontFamily: '"Gochi Hand", cursive',
+                fontSize: 22, color: PENCIL_GRAY, letterSpacing: '.5px',
+                padding: '2px 0',
               },
             }),
-            // Body copy in crayon. Lines break manually so the rag stays tidy.
-            React.createElement('div', {
-              style: {
-                fontFamily: '"Gochi Hand", cursive',
-                fontSize: 19, lineHeight: 1.32,
-                color: PENCIL_GRAY, textAlign: 'center',
-                letterSpacing: '.2px',
-              },
-            },
-              React.createElement('div', { style: { color: CRAYON_NAVY, marginBottom: 8 } },
-                'a tone-controlled', React.createElement('br'),
-                'debt-collection letter generator.'
-              ),
-              'someone owes you money.', React.createElement('br'),
-              "you don't want to ask.", React.createElement('br'),
-              React.createElement('span', { style: { display: 'inline-block', height: 8 } }),
-              React.createElement('br'),
-              'the chicken will ask.', React.createElement('br'),
-              'you pick how nicely.'
-            )
+            React.createElement(PencilUnderline, { seed: 23 })
           )
         )
       ),
@@ -535,18 +631,25 @@ function App() {
         onSubmit: submitForm, errors, busy,
         letter: showLetter, version: letterVersion,
         onCopy: copyLetter, onRegenerate: regenerate,
-        onSave: save, onEmail: sendEmail, onStartOver: startOver,
-        savedFlash, planeFlash,
+        onSave: save, onStartOver: startOver,
+        savedFlash,
       })
     ),
 
-    // App: chicken on the right, reacting to the rage. Bigger, sits next
-    // to the (right-edge ~1048) worksheet with breathing room.
+    // App: chicken on the right, reacting to the rage. Clickable — each
+    // click pokes the chicken to the next angrier image, decaying back
+    // after 3s. displayedChickenRage = min(rage + pokes, 4).
     React.createElement('div', {
-      style: appUI({ position: 'absolute', left: 1060, top: 100, width: 360, height: 460, zIndex: 3 }),
+      style: appUI({
+        position: 'absolute', left: 1060, top: 100,
+        width: 360, height: 460, zIndex: 3,
+        cursor: 'pointer',
+      }),
+      onClick: pokeChicken,
+      title: 'poke me',
     },
       React.createElement(Chicken, {
-        rage, width: 360,
+        rage: displayedChickenRage, width: 360,
         style: { position: 'absolute', left: 0, top: 0, width: 360 },
       })
     ),
@@ -595,10 +698,9 @@ def _build_iframe_html(state: dict, assets: dict) -> str:
         "is_streaming":       state["is_streaming"],
         "letters":            state["letters"],
         "validation_errors":  state["validation_errors"],
-        "flash_saved":        state["flash_saved"],
-        "flash_plane":        state["flash_plane"],
         "api_error":          state["api_error"],
         "letter_version":     state["letter_version"],
+        "user_age":           state.get("user_age"),
     }
     default_form = {
         "debtor_name": "",
@@ -646,12 +748,20 @@ def _build_iframe_html(state: dict, assets: dict) -> str:
       80%  {{ transform: translate(-50%, -50%) rotate(-12deg) scale(1.0);  opacity: 1; }}
       100% {{ transform: translate(-50%, -50%) rotate(-12deg) scale(1.0);  opacity: 0; }}
     }}
-    @keyframes paper-plane {{
-      0%   {{ transform: translateX(0) translateY(0) rotate(-12deg); opacity: 1; }}
-      100% {{ transform: translateX(120vw) translateY(-22vh) rotate(-18deg); opacity: 0; }}
-    }}
     .grudge-scroll::-webkit-scrollbar {{ height: 10px; }}
     .grudge-scroll::-webkit-scrollbar-thumb {{ background: rgba(26,20,16,.25); border-radius: 999px; }}
+    /* Letter-area scrollbar: muted so it blends with the cream paper
+       instead of reading as a default-gray browser bar. */
+    .pmb-letter-scroll {{ scrollbar-width: thin; scrollbar-color: rgba(60,40,10,0.28) transparent; }}
+    .pmb-letter-scroll::-webkit-scrollbar {{ width: 10px; }}
+    .pmb-letter-scroll::-webkit-scrollbar-track {{ background: transparent; }}
+    .pmb-letter-scroll::-webkit-scrollbar-thumb {{
+      background: rgba(60, 40, 10, 0.28); border-radius: 5px;
+      border: 2px solid transparent; background-clip: padding-box;
+    }}
+    .pmb-letter-scroll::-webkit-scrollbar-thumb:hover {{
+      background: rgba(60, 40, 10, 0.45); background-clip: padding-box;
+    }}
     input::placeholder, textarea::placeholder {{ color: rgba(58,53,48,.42); }}
     select {{ -webkit-appearance: none; appearance: none; }}
   </style>
@@ -680,6 +790,13 @@ def main() -> None:
     _init_state()
     ss = st.session_state
 
+    # Always pull a fresh letters list from the DB at the top of each
+    # script run. This keeps the hall in sync with `save` writes done
+    # in previous non-rerunning script runs (see _handle_action save
+    # branch) without forcing those writes to trigger a rerun + iframe
+    # re-srcdoc (which would re-stream the displayed letter).
+    ss["letters"] = db_service.get_all_letters()
+
     assets = _asset_data_urls()
     # Page-chrome reset + neutral fill behind the letterboxed stage. The desk
     # itself now lives inside the iframe (it's the zoomable camera layer).
@@ -706,19 +823,12 @@ def main() -> None:
             "is_streaming":      ss["is_streaming"],
             "letters":           ss["letters"],
             "validation_errors": ss["validation_errors"],
-            "flash_saved":       ss["flash_saved"],
-            "flash_plane":       ss["flash_plane"],
             "api_error":         ss["api_error"],
             "letter_version":    ss["letter_version"],
+            "user_age":          ss.get("user_age"),
         },
         assets=assets,
     )
-
-    # Clear one-shot flashes so they don't re-fire on next rerun.
-    if ss["flash_saved"]:
-        ss["flash_saved"] = False
-    if ss["flash_plane"]:
-        ss["flash_plane"] = False
 
     # Use the registered custom component (pmb_component) instead of
     # streamlit.components.v1.html — the latter is render-only and silently
@@ -738,8 +848,11 @@ def main() -> None:
                 f"nonce={nonce!r}",
                 file=sys.stderr, flush=True,
             )
-            _handle_action(component_value)
-            st.rerun()
+            result = _handle_action(component_value)
+            # `save` deliberately suppresses the rerun so the iframe's
+            # already-displayed letter doesn't re-srcdoc and re-stream.
+            if result != "no_rerun":
+                st.rerun()
 
 
 main()

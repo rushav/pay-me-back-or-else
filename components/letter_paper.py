@@ -101,19 +101,7 @@ function SavedStamp({ show, rage }) {
   }, 'SAVED');
 }
 
-function PaperPlane({ show }) {
-  if (!show) return null;
-  return React.createElement('div', {
-    style: {
-      position: 'fixed', top: '50%', left: '20%',
-      fontSize: 60,
-      pointerEvents: 'none', zIndex: 80,
-      animation: 'paper-plane 1.4s ease-in forwards',
-    },
-  }, '✈');
-}
-
-function LetterActions({ rage, letter, onCopy, onRegenerate, onSave, onEmail, onStartOver, busy }) {
+function LetterActions({ rage, letter, onCopy, onRegenerate, onSave, onStartOver, busy }) {
   const c = CRAYON[rage];
   const btn = (label, fn, seed) => React.createElement('button', {
     type: 'button',
@@ -149,13 +137,12 @@ function LetterActions({ rage, letter, onCopy, onRegenerate, onSave, onEmail, on
     btn('copy', onCopy, 31),
     btn('regenerate', onRegenerate, 37),
     btn('save', onSave, 41),
-    btn('send email', onEmail, 43),
     btn('start over', onStartOver, 47)
   );
 }
 
 // Normal-flow letter area (shares the centered worksheet with the form).
-function LetterBody({ rage, letter, version, busy, onCopy, onRegenerate, onSave, onEmail, onStartOver }) {
+function LetterBody({ rage, letter, version, busy, onCopy, onRegenerate, onSave, onStartOver }) {
   const empty = !letter;
   return React.createElement('div', {
     style: { flex: '1 1 auto', minHeight: 0, display: 'flex', flexDirection: 'column' },
@@ -217,12 +204,15 @@ function LetterBody({ rage, letter, version, busy, onCopy, onRegenerate, onSave,
     ),
 
     !empty && React.createElement(React.Fragment, null,
-      React.createElement('div', { style: { flex: '1 1 auto', minHeight: 0, overflow: 'auto' } },
+      React.createElement('div', {
+        className: 'pmb-letter-scroll',
+        style: { flex: '1 1 auto', minHeight: 0, overflow: 'auto' },
+      },
         React.createElement(StreamedCrayon, { text: letter, rage, version, fontSize: 21 })
       ),
       React.createElement(LetterActions, {
         rage, letter, busy,
-        onCopy, onRegenerate, onSave, onEmail, onStartOver,
+        onCopy, onRegenerate, onSave, onStartOver,
       })
     )
   );
@@ -233,9 +223,16 @@ function LetterBody({ rage, letter, version, busy, onCopy, onRegenerate, onSave,
 // the user submits (busy) or a letter exists, the form is replaced by the
 // letter view. "start over" clears the letter and brings the form back.
 // The two states cross-fade via opacity so the dimensions stay stable.
+//
+// The KidPaper backing is kept here as a "blended" sheet — the desk's
+// painted paper is far smaller than what a form+letter view needs, so we
+// can't remove the rendered paper entirely without overflowing onto the
+// wood grain (unreadable). We dim and feather the paper instead so it
+// reads as an extension of the painted sheet rather than an obvious
+// overlay rectangle.
 function Worksheet({ rage, values, onChange, onSubmit, errors, busy,
-                     letter, version, onCopy, onRegenerate, onSave, onEmail, onStartOver,
-                     savedFlash, planeFlash }) {
+                     letter, version, onCopy, onRegenerate, onSave, onStartOver,
+                     savedFlash }) {
   const W = 760, H = 780;
   const showLetter = busy || !!letter;
   const layer = (visible) => ({
@@ -248,20 +245,27 @@ function Worksheet({ rage, values, onChange, onSubmit, errors, busy,
     pointerEvents: visible ? 'auto' : 'none',
     transition: 'opacity 250ms ease',
   });
-  return React.createElement('div', { style: { position: 'relative' } },
+  return React.createElement('div', { style: { position: 'relative', opacity: 0.92 } },
     React.createElement(SavedStamp, { show: savedFlash, rage }),
-    React.createElement(KidPaper, { width: W, height: H, seed: 11, tone: PAPER_BG_ALT, rotation: 0.6 },
+    React.createElement(KidPaper, {
+      width: W, height: H, seed: 11,
+      // Lighter tone + lower-contrast drop-shadow makes the paper read as
+      // continuous with the desk's painted sheet rather than a separate
+      // overlay rectangle on the wood grain.
+      tone: 'rgba(248, 240, 215, 0.72)',
+      rotation: 0.6,
+      style: { filter: 'drop-shadow(0 6px 14px rgba(40,20,0,.12))' },
+    },
       React.createElement('div', { style: layer(!showLetter) },
         React.createElement(WorksheetFormBody, { rage, values, onChange, onSubmit, errors, busy })
       ),
       React.createElement('div', { style: layer(showLetter) },
         React.createElement(LetterBody, {
           rage, letter, version, busy,
-          onCopy, onRegenerate, onSave, onEmail, onStartOver,
+          onCopy, onRegenerate, onSave, onStartOver,
         })
       )
-    ),
-    React.createElement(PaperPlane, { show: planeFlash })
+    )
   );
 }
 """

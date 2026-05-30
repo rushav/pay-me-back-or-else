@@ -37,6 +37,13 @@ def _client() -> anthropic.Anthropic:
     return anthropic.Anthropic(api_key=api_key)
 
 
+ADULT_TONE_MODIFIER = (
+    ", uncensored, real profanity allowed (shit, fuck, damn, etc) used "
+    "for comedic emphasis, still funny not actually cruel, no slurs or "
+    "attacks on protected characteristics"
+)
+
+
 def build_prompt(
     name: str,
     amount: str,
@@ -46,8 +53,16 @@ def build_prompt(
     rage_level: int,
     context: str = "",
     payment_handle: str = "",
+    user_age: int | None = None,
 ) -> str:
-    tone = TONE_INSTRUCTIONS[int(rage_level)]
+    rage_int = int(rage_level)
+    tone = TONE_INSTRUCTIONS[rage_int]
+
+    # Age gate: profanity modifier applies ONLY at rage 3 / 4 AND when the
+    # user has self-declared an age >= 18. Blank, invalid, or <18 ages
+    # keep the comedic-but-clean default.
+    if rage_int in (3, 4) and isinstance(user_age, int) and user_age >= 18:
+        tone = tone + ADULT_TONE_MODIFIER
 
     extras = []
     if context.strip():
@@ -83,6 +98,8 @@ def stream_letter(form_data: dict) -> Iterator[str]:
     # _client() raises MissingAPIKeyError on its own; keep it outside the
     # wrapper so the caller's specific handler still catches it cleanly.
     client = _client()
+    raw_age = form_data.get("user_age")
+    user_age = raw_age if isinstance(raw_age, int) and raw_age > 0 else None
     prompt = build_prompt(
         name=form_data.get("debtor_name", ""),
         amount=str(form_data.get("amount", "")).lstrip("$"),
@@ -92,6 +109,7 @@ def stream_letter(form_data: dict) -> Iterator[str]:
         rage_level=int(form_data.get("rage_level", 1)),
         context=form_data.get("context", ""),
         payment_handle=form_data.get("payment_handle", ""),
+        user_age=user_age,
     )
 
     try:
