@@ -239,7 +239,13 @@ function Worksheet({ rage, values, onChange, onSubmit, errors, busy,
     display: 'flex', flexDirection: 'column', gap: 10,
     overflow: 'hidden',
     opacity: visible ? 1 : 0,
-    pointerEvents: visible ? 'auto' : 'none',
+    // INHERIT — not 'auto'. Was 'auto' before, which overrode the
+    // parent appUI wrapper's pointer-events:none on landing view and
+    // turned this (invisible) overlay into a click-eater that sat on
+    // top of the age input on the desk underneath. With 'inherit' the
+    // visible layer is clickable in app view (parent appUI = 'auto')
+    // and click-through in landing view (parent appUI = 'none').
+    pointerEvents: visible ? 'inherit' : 'none',
     transition: 'opacity 250ms ease',
   });
   return React.createElement('div', { style: { position: 'relative', width: W, height: H } },
