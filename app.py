@@ -73,9 +73,13 @@ def _styles_css() -> str:
 
 def _init_state() -> None:
     ss = st.session_state
-    # View persists in the URL so a hard refresh restores the same view.
-    qp_view = st.query_params.get("view")
-    ss.setdefault("view", qp_view if qp_view in ("landing", "app") else "landing")
+    # Every fresh session starts on the landing page. We deliberately do NOT
+    # read from query params or any other persistence — a hard refresh
+    # should bring the desk + "write a letter" CTA back, not drop the user
+    # straight into the worksheet. In-session reruns (form keystrokes, rage
+    # tile clicks) preserve view via session_state's natural lifetime, and
+    # the zoom transition's animate-only-on-click guard lives in the iframe.
+    ss.setdefault("view", "landing")
     ss.setdefault("rage_level", 1)
     ss.setdefault("form_data", {
         "debtor_name": "",
@@ -158,7 +162,10 @@ def _handle_action(payload: dict) -> None:
         view = payload.get("view")
         if view in ("landing", "app"):
             st.session_state["view"] = view
-            st.query_params["view"] = view
+            # Intentionally NOT mirroring to st.query_params anymore —
+            # that's what caused refresh-after-CTA to skip the landing
+            # page. session_state alone keeps view stable across the
+            # in-session reruns; a true refresh resets it to "landing".
 
     elif action == "set_rage":
         st.session_state["rage_level"] = int(payload.get("rage", 1))
