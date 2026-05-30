@@ -241,26 +241,44 @@ function sendToStreamlit(value) {
   window.parent.postMessage(payload, '*');
 }
 
+// Idempotent + debounced height reporter.
+//
+// Without idempotency this loops on the live deploy (and locally when
+// window.top is briefly unreadable). The chain is:
+//   inner fit() → setFrameHeight → harness forwards →
+//   Streamlit resizes harness → inner is height:100vh so it resizes too →
+//   inner's `resize` event fires → fit() runs → setFrameHeight again …
+// Reporting the same value twice causes Streamlit to re-emit a render,
+// re-srcdoc the inner iframe, and restart the cycle. Idempotency
+// (don't re-send the same height) breaks the loop at its root; the
+// debounce coalesces bursts (e.g. mount + late useEffect + resize) into
+// one outgoing message.
+let _lastReportedHeight = null;
+let _frameHeightTimer = null;
 function setFrameHeight() {
-  // Read the Streamlit page's viewport height so the component iframe can
-  // fill it (no black letterbox bars). window.top is same-origin in normal
-  // Streamlit deploys; fall back to our own height if the read is blocked.
-  let h;
-  try { h = window.top.innerHeight; } catch (e) { h = window.innerHeight; }
-  if (!h) h = window.innerHeight;
-  window.parent.postMessage({
-    isStreamlitMessage: true,
-    type: 'streamlit:setFrameHeight',
-    height: h,
-  }, '*');
+  if (_frameHeightTimer) return;  // already queued
+  _frameHeightTimer = setTimeout(() => {
+    _frameHeightTimer = null;
+    let h;
+    try { h = window.top.innerHeight; } catch (e) { h = window.innerHeight; }
+    if (!h) h = window.innerHeight;
+    if (h === _lastReportedHeight) return;  // dedupe
+    _lastReportedHeight = h;
+    window.parent.postMessage({
+      isStreamlitMessage: true,
+      type: 'streamlit:setFrameHeight',
+      height: h,
+    }, '*');
+  }, 100);
 }
 
-// When the Streamlit page resizes, this iframe doesn't get its own resize
-// event unless its dimensions actually change — listen on window.top so
-// we rescale + resize together.
+// When the BROWSER window resizes, our own `resize` event won't fire
+// unless our container dimensions change. Listen on window.top to catch
+// real browser-window resizes that change the target viewport height.
+// (Idempotency above means a no-op resize won't re-trigger a loop.)
 try {
   window.top.addEventListener('resize', setFrameHeight);
-} catch (e) { /* cross-origin: live with the initial height */ }
+} catch (e) { /* cross-origin in some deploys: skip */ }
 
 window.parent.postMessage({
   isStreamlitMessage: true,

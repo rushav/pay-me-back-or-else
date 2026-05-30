@@ -26,7 +26,7 @@
     // user clicks submit and watches the terminal.
 
     const inner = document.getElementById('inner');
-    let lastPayloadLen = 0;
+    let lastPayload = '';
 
     window.addEventListener('message', function (event) {
       if (!event.data) return;
@@ -35,11 +35,13 @@
       if (event.source === window.parent && event.data.type === 'streamlit:render') {
         const args = (event.data.args) || {};
         const html = args.payload_html;
-        if (typeof html === 'string') {
-          if (html.length !== lastPayloadLen) {
-            console.log('[pmb-harness] re-srcdoc inner iframe, payload bytes=' + html.length);
-            lastPayloadLen = html.length;
-          }
+        // Only re-srcdoc when the payload genuinely changes. Assigning the
+        // same string to srcdoc still reloads the iframe in every browser,
+        // which would remount our React app + re-fire setFrameHeight on
+        // every Streamlit re-render and feed the size loop.
+        if (typeof html === 'string' && html !== lastPayload) {
+          lastPayload = html;
+          console.log('[pmb-harness] re-srcdoc inner iframe, payload bytes=' + html.length);
           inner.srcdoc = html;
         }
         return;

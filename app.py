@@ -250,17 +250,21 @@ function App() {
   const stageRef = useRef(null);
 
   // Scale the fixed 1440x900 stage to fit the viewport (letterbox).
+  // rescale() is cheap and safe to fire on every iframe resize; the height
+  // report is intentionally NOT triggered from here — that path is owned
+  // by setFrameHeight's own debounced/idempotent listener on window.top.
+  // Calling setFrameHeight from rescale() created the resize feedback loop.
   useEffect(() => {
-    const fit = () => {
+    const rescale = () => {
       const el = stageRef.current;
       if (!el) return;
       const s = Math.min(window.innerWidth / STAGE_W, window.innerHeight / STAGE_H);
       el.style.transform = `scale(${s})`;
-      setFrameHeight();
     };
-    fit();
-    window.addEventListener('resize', fit);
-    return () => window.removeEventListener('resize', fit);
+    rescale();
+    setFrameHeight();  // one-shot on mount, dedup'd inside setFrameHeight
+    window.addEventListener('resize', rescale);
+    return () => window.removeEventListener('resize', rescale);
   }, []);
 
   // Saved/plane animations are one-shot.
@@ -276,12 +280,14 @@ function App() {
     return () => clearTimeout(t);
   }, [planeFlash]);
 
-  // Re-tell Streamlit about our height after layout settles.
+  // One late re-measure after layout settles (fonts, async images). This
+  // used to have no dep array — it fired on EVERY render and queued two
+  // more setFrameHeights per render, which was the dominant resize-loop
+  // amplifier. Now it runs exactly once on mount.
   useEffect(() => {
-    const t = setTimeout(setFrameHeight, 60);
-    const t2 = setTimeout(setFrameHeight, 400);
-    return () => { clearTimeout(t); clearTimeout(t2); };
-  });
+    const t = setTimeout(setFrameHeight, 400);
+    return () => clearTimeout(t);
+  }, []);
 
   const changeRage = (r) => {
     setRage(r);
