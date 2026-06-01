@@ -54,6 +54,21 @@ def test_saved_fields_round_trip(temp_db):
     assert row["letter_text"] == "pay up please"
 
 
+def test_partial_letter_saves_like_a_full_one(temp_db):
+    """A partial (interrupted) letter is persisted through the same path as a
+    full one — save_letter only cares that letter_text is non-empty. This
+    backs change #2's "Save and continue" dialog button."""
+    partial = "marcus, you owe me twel"  # cut off mid-word, as if interrupted
+    new_id = db_service.save_letter(
+        _form(debtor_name="Marcus", rage_level=3), partial
+    )
+    assert new_id > 0
+    row = db_service.get_all_letters()[0]
+    assert row["letter_text"] == partial
+    assert row["debtor_name"] == "Marcus"
+    assert row["rage_level"] == 3
+
+
 def test_delete_removes_entry(temp_db):
     new_id = db_service.save_letter(_form(), "temporary grudge")
     assert len(db_service.get_all_letters()) == 1

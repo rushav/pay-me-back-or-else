@@ -6,7 +6,7 @@ def history_js() -> str:
 const RAGE_FG = { 1: '#1c3b8f', 2: '#5a3a1a', 3: '#c8421a', 4: '#0a0a0a' };
 
 // Bottom-left collapsible drawer (anchored bottom-left; grows up + right).
-function HallDrawer({ currentRage, letters, onDelete, active, animate }) {
+function HallDrawer({ currentRage, letters, onDelete, onPick, active, animate }) {
   const [open, setOpen] = useState(false);
   const [confirmId, setConfirmId] = useState(null);
 
@@ -34,7 +34,7 @@ function HallDrawer({ currentRage, letters, onDelete, active, animate }) {
       }),
       open && React.createElement(ExpandedHallView, {
         currentRage, letters, onClose: () => { setOpen(false); setConfirmId(null); },
-        onDelete, confirmId, setConfirmId,
+        onDelete, onPick, confirmId, setConfirmId,
       })
     )
   );
@@ -78,7 +78,7 @@ function CollapsedHallView({ count, onOpen }) {
   );
 }
 
-function ExpandedHallView({ currentRage, letters, onClose, onDelete, confirmId, setConfirmId }) {
+function ExpandedHallView({ currentRage, letters, onClose, onDelete, onPick, confirmId, setConfirmId }) {
   return React.createElement('div', {
     style: {
       position: 'absolute', inset: 0,
@@ -143,6 +143,7 @@ function ExpandedHallView({ currentRage, letters, onClose, onDelete, confirmId, 
               key: g.id, g,
               isCurrentRage: g.rage_level === currentRage,
               confirmDelete: confirmId === g.id,
+              onPick: () => onPick(g),
               onAskDelete: () => setConfirmId(g.id),
               onConfirmDelete: () => { onDelete(g.id); setConfirmId(null); },
               onCancelDelete: () => setConfirmId(null),
@@ -152,14 +153,22 @@ function ExpandedHallView({ currentRage, letters, onClose, onDelete, confirmId, 
   );
 }
 
-function GrudgeCard({ g, isCurrentRage, confirmDelete, onAskDelete, onConfirmDelete, onCancelDelete }) {
+function GrudgeCard({ g, isCurrentRage, confirmDelete, onPick, onAskDelete, onConfirmDelete, onCancelDelete }) {
   const dots = '●●●●'.slice(0, g.rage_level) + '○○○○'.slice(0, 4 - g.rage_level);
   const fg = RAGE_FG[g.rage_level];
   const snippet = (g.letter_text || '').slice(0, 80) + ((g.letter_text || '').length > 80 ? '…' : '');
   const tone = CRAYON[g.rage_level].label;
   const created = (g.created_at || '').split(' ')[0] || '';
 
+  // The whole card is a reopen target (change #1): clicking it loads the
+  // saved letter back into the worksheet. The delete controls below
+  // stopPropagation so they don't double as a reopen.
   return React.createElement('div', {
+    'data-no-drag': true,
+    onClick: onPick,
+    title: 'reopen this letter',
+    onMouseEnter: (e) => { e.currentTarget.style.transform = 'translateY(-2px)'; },
+    onMouseLeave: (e) => { e.currentTarget.style.transform = 'none'; },
     style: {
       flex: '0 0 240px',
       background: '#fbf5e3',
@@ -172,6 +181,8 @@ function GrudgeCard({ g, isCurrentRage, confirmDelete, onAskDelete, onConfirmDel
       scrollSnapAlign: 'start',
       fontFamily: 'Inter, system-ui, sans-serif',
       color: '#1a1410', position: 'relative',
+      cursor: 'pointer',
+      transition: 'transform .12s ease',
     },
   },
     React.createElement('div', {
@@ -219,7 +230,7 @@ function GrudgeCard({ g, isCurrentRage, confirmDelete, onAskDelete, onConfirmDel
         ? React.createElement('div', { style: { display: 'flex', gap: 4 } },
             React.createElement('button', {
               'data-no-drag': true,
-              onClick: onConfirmDelete,
+              onClick: (e) => { e.stopPropagation(); onConfirmDelete(); },
               style: {
                 background: '#b51212', color: 'white', border: 'none',
                 padding: '3px 7px', borderRadius: 4, fontSize: 11,
@@ -228,7 +239,7 @@ function GrudgeCard({ g, isCurrentRage, confirmDelete, onAskDelete, onConfirmDel
             }, 'yes, burn it'),
             React.createElement('button', {
               'data-no-drag': true,
-              onClick: onCancelDelete,
+              onClick: (e) => { e.stopPropagation(); onCancelDelete(); },
               style: {
                 background: 'transparent', color: PENCIL_GRAY,
                 border: '1px solid rgba(60,40,10,.3)',
@@ -239,7 +250,7 @@ function GrudgeCard({ g, isCurrentRage, confirmDelete, onAskDelete, onConfirmDel
           )
         : React.createElement('button', {
             'data-no-drag': true,
-            onClick: onAskDelete,
+            onClick: (e) => { e.stopPropagation(); onAskDelete(); },
             style: {
               background: 'transparent', color: PENCIL_GRAY,
               border: 'none', cursor: 'pointer',

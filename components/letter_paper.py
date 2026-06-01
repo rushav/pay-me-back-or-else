@@ -3,15 +3,19 @@
 
 def letter_paper_js() -> str:
     return r"""
-function StreamedCrayon({ text, rage, version = 0, fontSize = 22, speed }) {
-  const [n, setN] = useState(0);
+function StreamedCrayon({ text, rage, version = 0, fontSize = 22, speed,
+                          instant = false, onStreamingChange }) {
+  // instant (reopened saved letters) shows the whole letter immediately;
+  // otherwise reveal char-by-char.
+  const [n, setN] = useState(instant ? (text ? text.length : 0) : 0);
 
   // Reveal speed: rage 1-3 throttle ~26ms; rage 4 no throttle.
   const realSpeed = speed != null ? speed : (rage === 4 ? 6 : 26);
 
   useEffect(() => {
+    if (!text) { setN(0); return; }
+    if (instant) { setN(text.length); return; }   // no typewriter on reopen
     setN(0);
-    if (!text) return;
     const id = setInterval(() => {
       setN(prev => {
         if (prev >= text.length) { clearInterval(id); return prev; }
@@ -19,7 +23,22 @@ function StreamedCrayon({ text, rage, version = 0, fontSize = 22, speed }) {
       });
     }, realSpeed);
     return () => clearInterval(id);
-  }, [text, version, realSpeed]);
+  }, [text, version, realSpeed, instant]);
+
+  // Report reveal status up to App (drives the rage-tile collapse in #3 and
+  // the interrupt dialog in #2). True while mid-reveal, false once it lands
+  // on the final char or when rendering instantly. setState bails on an
+  // unchanged value, so the per-char calls are cheap.
+  useEffect(() => {
+    if (!onStreamingChange) return;
+    onStreamingChange(!instant && !!text && n < text.length);
+  }, [n, text, instant]);
+
+  // Always release the streaming flag when this letter view unmounts
+  // (start over, reopen, form switch) so the tiles never stay collapsed.
+  useEffect(() => {
+    return () => { if (onStreamingChange) onStreamingChange(false); };
+  }, []);
 
   const c = CRAYON[rage];
   const visible = text.slice(0, n);
@@ -142,7 +161,8 @@ function LetterActions({ rage, letter, onCopy, onRegenerate, onSave, onStartOver
 }
 
 // Normal-flow letter area (shares the centered worksheet with the form).
-function LetterBody({ rage, letter, version, busy, onCopy, onRegenerate, onSave, onStartOver }) {
+function LetterBody({ rage, letter, version, busy, onCopy, onRegenerate, onSave, onStartOver,
+                      instant, onTyping }) {
   const empty = !letter;
   return React.createElement('div', {
     style: { flex: '1 1 auto', minHeight: 0, display: 'flex', flexDirection: 'column' },
@@ -208,7 +228,10 @@ function LetterBody({ rage, letter, version, busy, onCopy, onRegenerate, onSave,
         className: 'pmb-letter-scroll',
         style: { flex: '1 1 auto', minHeight: 0, overflow: 'auto' },
       },
-        React.createElement(StreamedCrayon, { text: letter, rage, version, fontSize: 21 })
+        React.createElement(StreamedCrayon, {
+          text: letter, rage, version, fontSize: 21,
+          instant, onStreamingChange: onTyping,
+        })
       ),
       React.createElement(LetterActions, {
         rage, letter, busy,
@@ -229,7 +252,7 @@ function LetterBody({ rage, letter, version, busy, onCopy, onRegenerate, onSave,
 // and the content sits invisibly bounded inside the 760×780 footprint.
 function Worksheet({ rage, values, onChange, onSubmit, errors, busy,
                      letter, version, onCopy, onRegenerate, onSave, onStartOver,
-                     savedFlash }) {
+                     savedFlash, instant, onTyping }) {
   const W = 760, H = 780;
   const showLetter = busy || !!letter;
   const layer = (visible) => ({
@@ -257,7 +280,64 @@ function Worksheet({ rage, values, onChange, onSubmit, errors, busy,
       React.createElement(LetterBody, {
         rage, letter, version, busy,
         onCopy, onRegenerate, onSave, onStartOver,
+        instant, onTyping,
       })
+    )
+  );
+}
+
+// Interrupt confirm dialog (change #2). A small focused cream panel centered
+// over the worksheet — deliberately NOT a full-page modal overlay. Shown only
+// while a letter is streaming and the user tries a destructive action
+// (start over, reopen a saved letter, …). Three rough-box buttons match the
+// main action buttons' style.
+function ConfirmDialog({ rage, onSave, onDiscard, onCancel }) {
+  const c = CRAYON[rage] || CRAYON[1];
+  const btn = (label, fn, seed, strong) => React.createElement('button', {
+    type: 'button', 'data-no-drag': true, onClick: fn,
+    style: {
+      background: 'transparent', border: 'none', padding: 0,
+      cursor: 'pointer', color: c.main,
+    },
+  },
+    React.createElement(RoughBox, {
+      stroke: c.main, strokeWidth: strong ? 3 : 2, seed, padding: '8px 14px',
+    },
+      React.createElement('span', {
+        style: {
+          fontFamily: '"Gochi Hand", cursive', fontSize: 16,
+          color: c.main, letterSpacing: '.3px',
+        },
+      }, label)
+    )
+  );
+  return React.createElement('div', {
+    'data-no-drag': true,
+    style: {
+      position: 'absolute', top: '50%', left: '50%',
+      transform: 'translate(-50%, -50%) rotate(-1deg)',
+      width: 360, boxSizing: 'border-box',
+      background: '#f6ecd1',
+      border: '2px solid rgba(60,40,10,.5)', borderRadius: 8,
+      boxShadow: '0 18px 44px rgba(40,20,0,.35)',
+      padding: '22px 22px 20px',
+      zIndex: 60,
+      display: 'flex', flexDirection: 'column',
+      alignItems: 'center', gap: 16, textAlign: 'center',
+    },
+  },
+    React.createElement('div', {
+      style: {
+        fontFamily: '"Gochi Hand", cursive', fontSize: 22,
+        color: CRAYON_NAVY, lineHeight: 1.25,
+      },
+    }, "the chicken's still writing.", React.createElement('br'), 'save this one first?'),
+    React.createElement('div', {
+      style: { display: 'flex', flexWrap: 'wrap', gap: 10, justifyContent: 'center' },
+    },
+      btn('save and continue', onSave, 19, true),
+      btn('discard and continue', onDiscard, 23),
+      btn('cancel', onCancel, 29)
     )
   );
 }

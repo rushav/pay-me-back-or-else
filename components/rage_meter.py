@@ -41,42 +41,55 @@ function ActiveTileRing({ color, seed }) {
   );
 }
 
-function NakedRageTiles({ rage, setRage }) {
+function NakedRageTiles({ rage, setRage, streaming }) {
+  // While a letter is streaming (#3) the meter collapses to just the selected
+  // tile: the other three fade out and shrink to zero height (so the layout
+  // eases shut rather than snapping), and go non-interactive.
   return React.createElement('div', {
-    style: { display: 'flex', flexDirection: 'column', gap: 4, width: '100%' },
+    style: { display: 'flex', flexDirection: 'column', width: '100%' },
   },
     RAGE_TIERS.map((t) => {
       const active = rage === t.rage;
+      const hidden = streaming && !active;
       const c = CRAYON[t.rage];
       return React.createElement('button', {
         key: t.rage,
         type: 'button',
         'data-no-drag': true,
+        disabled: hidden,
         onClick: () => setRage(t.rage),
         style: {
           position: 'relative',
           background: 'transparent', border: 'none',
-          padding: '9px 12px', cursor: 'pointer',
+          paddingLeft: 12, paddingRight: 12,
+          paddingTop: hidden ? 0 : 9, paddingBottom: hidden ? 0 : 9,
+          marginBottom: hidden ? 0 : 4,
+          maxHeight: hidden ? 0 : 80,
+          overflow: 'hidden',
+          cursor: hidden ? 'default' : 'pointer',
           textAlign: 'left',
           fontFamily: '"Gochi Hand", cursive',
           color: active ? c.main : '#3a3530',
           // Inactive tiles get a soft dashed outline so they read as
-          // interactive at a glance, not just labels.
-          outline: active ? 'none' : '1px dashed rgba(60,40,10,.28)',
+          // interactive at a glance, not just labels. Suppressed once
+          // collapsed.
+          outline: (active || hidden) ? 'none' : '1px dashed rgba(60,40,10,.28)',
           outlineOffset: '-3px', borderRadius: 6,
-          opacity: active ? 1 : 0.78,
-          transition: 'opacity .15s, color .15s, transform .15s, outline-color .15s',
+          opacity: hidden ? 0 : (active ? 1 : 0.78),
+          pointerEvents: hidden ? 'none' : 'auto',
+          transition: 'opacity .3s ease, max-height .3s ease, padding .3s ease, '
+            + 'margin .3s ease, color .15s, transform .15s, outline-color .15s',
           display: 'flex', alignItems: 'baseline', gap: 8,
           transform: active ? 'translateX(3px)' : 'none',
         },
         onMouseEnter: (e) => {
-          if (!active) {
+          if (!active && !hidden) {
             e.currentTarget.style.opacity = 0.95;
             e.currentTarget.style.outline = '1px dashed rgba(60,40,10,.55)';
           }
         },
         onMouseLeave: (e) => {
-          if (!active) {
+          if (!active && !hidden) {
             e.currentTarget.style.opacity = 0.78;
             e.currentTarget.style.outline = '1px dashed rgba(60,40,10,.28)';
           }
@@ -98,7 +111,7 @@ function NakedRageTiles({ rage, setRage }) {
 }
 
 // Left rail: thermometer (the rage gauge) over a compact tone selector.
-function RageMeter({ rage, setRage }) {
+function RageMeter({ rage, setRage, streaming }) {
   // Bigger card + larger thermometer + larger tile labels so the meter
   // reads as a primary interactive surface, not a side accessory.
   const W = 256, H = 760;
@@ -129,13 +142,18 @@ function RageMeter({ rage, setRage }) {
       React.createElement('div', {
         style: {
           fontFamily: '"Gochi Hand", cursive',
-          fontSize: 20, color: PENCIL_GRAY, opacity: .9, marginTop: -2,
+          fontSize: 20, color: PENCIL_GRAY, marginTop: -2,
+          // The "pick a tone" prompt eases out while streaming — there's
+          // nothing to pick once the meter has collapsed to one tile.
+          opacity: streaming ? 0 : .9,
+          maxHeight: streaming ? 0 : 40, overflow: 'hidden',
+          transition: 'opacity .3s ease, max-height .3s ease',
         },
       }, '↓ pick a tone ↓'),
       React.createElement('div', {
         style: { width: '100%', display: 'flex', justifyContent: 'center', marginTop: 4 },
       },
-        React.createElement(NakedRageTiles, { rage, setRage })
+        React.createElement(NakedRageTiles, { rage, setRage, streaming })
       )
     )
   );

@@ -92,6 +92,12 @@ def _init_state() -> None:
     })
     ss.setdefault("generated_letter", None)
     ss.setdefault("is_streaming", False)
+    # letter_instant: when True, the iframe renders the current letter
+    # without the typewriter animation (used for reopened saved letters).
+    # Default True so refreshes/reruns don't re-stream; a fresh generation
+    # flips it to False so that one render animates. See main()'s one-shot
+    # reset and _generate_letter / the reopen handler.
+    ss.setdefault("letter_instant", True)
     ss.setdefault("letters", db_service.get_all_letters())
     ss.setdefault("validation_errors", [])
     ss.setdefault("last_action_nonce", None)
@@ -119,6 +125,63 @@ def _coerce_age(raw) -> int | None:
     return n if n > 0 else None
 
 
+def build_form_from_saved(row: dict) -> dict:
+    """Reconstruct worksheet form_data from a saved-letter record.
+
+    `row` is either a SQLite row dict (debtor_name, amount, duration,
+    relationship, rage_level, letter_text, …) or an optimistic iframe-local
+    entry (which carries fewer fields). Fields that were never persisted at
+    save time (context, payment_handle) come back empty; `duration` — stored
+    as the combined "<n> <unit>" string — is split back into time_owed +
+    time_unit so Regenerate has the right inputs.
+    """
+    duration = str(row.get("duration", "") or "").strip()
+    parts = duration.split()
+    time_owed = parts[0] if parts else ""
+    time_unit = parts[1] if len(parts) > 1 else "weeks"
+
+    raw_amount = row.get("amount", "")
+    try:
+        f = float(raw_amount)
+        amount_str = str(int(f)) if f == int(f) else str(f)
+    except (TypeError, ValueError):
+        amount_str = str(raw_amount or "")
+
+    return {
+        "debtor_name": row.get("debtor_name", "") or "",
+        "amount": amount_str,
+        "time_owed": time_owed,
+        "time_unit": time_unit or "weeks",
+        "relationship": row.get("relationship", "friend") or "friend",
+        "context": "",
+        "payment_handle": "",
+    }
+
+
+def _maybe_save_first(payload: dict) -> None:
+    """If an interrupt-dialog action arrived with a `save_first` block, write
+    that (partial) letter to the DB before performing the destructive action.
+
+    The iframe bundles the save into the SAME message as the action because
+    setComponentValue is last-write-wins — two separate dispatches would lose
+    the first. An empty letter_text is skipped (nothing to save yet)."""
+    sf = payload.get("save_first")
+    if not isinstance(sf, dict):
+        return
+    letter_text = sf.get("letter_text")
+    if not letter_text:
+        return
+    saved_rage = int(sf.get("rage", st.session_state.get("rage_level", 1)))
+    db_service.save_letter(
+        {
+            **st.session_state["form_data"],
+            **(sf.get("form_data") or {}),
+            "rage_level": saved_rage,
+        },
+        letter_text,
+    )
+
+
 def _generate_letter(form_data: dict, rage: int, user_age: int | None = None) -> None:
     """Call Claude (streaming) and accumulate into session state."""
     merged = {**form_data, "rage_level": rage, "user_age": user_age}
@@ -132,6 +195,9 @@ def _generate_letter(form_data: dict, rage: int, user_age: int | None = None) ->
     st.session_state["is_streaming"] = True
     st.session_state["generated_letter"] = None
     st.session_state["api_error"] = None
+    # A freshly generated letter should animate (typewriter) on the next
+    # render; flip the one-shot instant flag off so main() renders it streamed.
+    st.session_state["letter_instant"] = False
 
     print(
         f"[app] _generate_letter: calling stream_letter "
@@ -180,6 +246,9 @@ def _handle_action(payload: dict) -> str | None:
 
     action = payload.get("action")
     if action == "set_view":
+        # A set_view can arrive from the interrupt dialog (the "write a
+        # letter" defensive case) carrying a save_first block.
+        _maybe_save_first(payload)
         view = payload.get("view")
         if view in ("landing", "app"):
             st.session_state["view"] = view
@@ -248,7 +317,44 @@ def _handle_action(payload: dict) -> str | None:
         db_service.delete_letter(letter_id)
         st.session_state["letters"] = db_service.get_all_letters()
 
+    elif action == "reopen":
+        # Reopen a saved letter into the worksheet. This is a single one-shot
+        # state swap (no streaming): restore generated_letter, form_data, and
+        # rage from the saved record so the user can Copy / Save / Start Over /
+        # Regenerate it. Discarding any in-progress letter is implicit — we
+        # overwrite generated_letter here. A save_first block (from the
+        # interrupt dialog's "Save and continue") is honored first.
+        _maybe_save_first(payload)
+
+        rid = payload.get("id")
+        fallback = payload.get("letter") or {}
+        row = None
+        # Prefer the canonical DB row (full fidelity: duration, relationship).
+        for L in st.session_state.get("letters", []):
+            if str(L.get("id")) == str(rid):
+                row = L
+                break
+        # Optimistic local entries (id='local-…') won't match by id — recover
+        # the real row by letter_text so Regenerate still has full inputs.
+        if row is None and fallback.get("letter_text"):
+            for L in st.session_state.get("letters", []):
+                if L.get("letter_text") == fallback.get("letter_text"):
+                    row = L
+                    break
+        if row is None:
+            row = fallback
+
+        st.session_state["form_data"] = build_form_from_saved(row)
+        st.session_state["rage_level"] = int(row.get("rage_level", 1) or 1)
+        st.session_state["generated_letter"] = row.get("letter_text", "") or ""
+        st.session_state["is_streaming"] = False
+        st.session_state["letter_instant"] = True  # render instantly, no typewriter
+        st.session_state["validation_errors"] = []
+        st.session_state["api_error"] = None
+
     elif action == "start_over":
+        # Honor "Save and continue" from the interrupt dialog before clearing.
+        _maybe_save_first(payload)
         st.session_state["form_data"] = {
             "debtor_name": "",
             "amount": "",
@@ -260,6 +366,7 @@ def _handle_action(payload: dict) -> str | None:
         }
         st.session_state["generated_letter"] = None
         st.session_state["is_streaming"] = False
+        st.session_state["letter_instant"] = True
         st.session_state["validation_errors"] = []
         st.session_state["api_error"] = None
     return None
@@ -322,6 +429,23 @@ function App() {
   // Age-input inline error (e.g. "please enter your age first"). Cleared
   // automatically on focus or any successful gate pass.
   const [ageError, setAgeError] = useState('');
+
+  // ── Streaming / interrupt state (changes #2 + #3) ──
+  // instant: render the current letter without the typewriter (reopened
+  // saved letters). Constant per mount, supplied by Python.
+  const instant = !!initial.letter_instant;
+  // typing: the typewriter is mid-reveal. Driven up from StreamedCrayon.
+  // Seeded true when a fresh (non-instant) letter is present on mount so
+  // the rage tiles collapse from the first paint (no flicker).
+  const [typing, setTyping] = useState(!!(initial.generated_letter) && !instant);
+  // pendingAction: the destructive action the user tried to take mid-stream,
+  // held until they pick Save / Discard / Cancel in the confirm dialog.
+  // Shapes: {kind:'start_over'} | {kind:'reopen', g} | {kind:'set_view_landing'}.
+  const [pendingAction, setPendingAction] = useState(null);
+  // A letter is "streaming" while we're waiting on Python (busy) OR while the
+  // typewriter is still revealing it (typing). Both the rage-tile collapse
+  // and the interrupt dialog key off this.
+  const isStreaming = busy || typing;
 
   const stageRef = useRef(null);
   // Decay timer for the chicken-poke counter. Held in a ref so it
@@ -453,6 +577,55 @@ function App() {
     setApiError(null);
     setPokes(0);
     sendToStreamlit({ action: 'start_over' });
+  };
+
+  // ── Reopen + interrupt plumbing (changes #1 + #2) ──
+
+  // Round-trip a saved letter back into the worksheet. Python restores
+  // generated_letter, form_data, and rage from the record and re-srcdocs
+  // the iframe with letter_instant=true (no typewriter). The drawer closes
+  // on its own because the fresh mount resets its local open state.
+  const doReopen = (g) => {
+    sendToStreamlit({ action: 'reopen', id: g.id, letter: g });
+  };
+
+  // The two interrupting actions guard on isStreaming: mid-stream they stash
+  // a pendingAction and pop the confirm dialog instead of firing immediately.
+  // (Rage-tile clicks need no guard — change #3 hides the tiles while
+  // streaming, so the interrupt can't originate there.)
+  const requestStartOver = () => {
+    if (isStreaming) { setPendingAction({ kind: 'start_over' }); return; }
+    startOver();
+  };
+  const requestReopen = (g) => {
+    if (isStreaming) { setPendingAction({ kind: 'reopen', g }); return; }
+    doReopen(g);
+  };
+
+  // Execute the stashed pendingAction. saveFirst bundles a DB write of the
+  // current (partial) letter into the SAME message as the action — required
+  // because setComponentValue is last-write-wins, so a separate save dispatch
+  // would be clobbered. Phase A (no letter yet) just skips the save.
+  const performPending = (saveFirst) => {
+    const pa = pendingAction;
+    setPendingAction(null);
+    if (!pa) return;
+    const savePayload = (saveFirst && letter)
+      ? { save_first: { form_data: values, rage, letter_text: letter } }
+      : {};
+    if (pa.kind === 'start_over') {
+      setValues(__DEFAULT_FORM__);
+      setLetter('');
+      setBusy(false);
+      setErrors([]);
+      setApiError(null);
+      setPokes(0);
+      sendToStreamlit({ action: 'start_over', ...savePayload });
+    } else if (pa.kind === 'reopen') {
+      sendToStreamlit({ action: 'reopen', id: pa.g.id, letter: pa.g, ...savePayload });
+    } else if (pa.kind === 'set_view_landing') {
+      sendToStreamlit({ action: 'set_view', view: 'landing', ...savePayload });
+    }
   };
 
   // Chicken poke: bump local poke counter; reset decay timer to 3s.
@@ -661,10 +834,12 @@ function App() {
     React.createElement('div', {
       style: appUI({ position: 'absolute', left: 18, top: 90, zIndex: 4 }),
     },
-      React.createElement(RageMeter, { rage, setRage: changeRage })
+      React.createElement(RageMeter, { rage, setRage: changeRage, streaming: isStreaming })
     ),
 
-    // App: worksheet center (form + streamed letter on one paper).
+    // App: worksheet center (form + streamed letter on one paper). The
+    // interrupt dialog is a sibling of the worksheet so it centers over the
+    // 760×780 worksheet footprint (this wrapper sizes to that content).
     React.createElement('div', {
       style: appUI({ position: 'absolute', left: 288, top: 60, zIndex: 5 }),
     },
@@ -673,8 +848,15 @@ function App() {
         onSubmit: submitForm, errors, busy,
         letter: showLetter, version: letterVersion,
         onCopy: copyLetter, onRegenerate: regenerate,
-        onSave: save, onStartOver: startOver,
+        onSave: save, onStartOver: requestStartOver,
         savedFlash,
+        instant, onTyping: setTyping,
+      }),
+      pendingAction && React.createElement(ConfirmDialog, {
+        rage,
+        onSave: () => performPending(true),
+        onDiscard: () => performPending(false),
+        onCancel: () => setPendingAction(null),
       })
     ),
 
@@ -708,6 +890,7 @@ function App() {
     React.createElement(HallDrawer, {
       currentRage: rage, letters,
       onDelete: (id) => sendToStreamlit({ action: 'delete', id }),
+      onPick: requestReopen,
       active: view === 'app', animate: animateZoom,
     })
    )
@@ -743,6 +926,7 @@ def _build_iframe_html(state: dict, assets: dict) -> str:
         "api_error":          state["api_error"],
         "letter_version":     state["letter_version"],
         "user_age":           state.get("user_age"),
+        "letter_instant":     state.get("letter_instant", True),
     }
     default_form = {
         "debtor_name": "",
@@ -856,6 +1040,12 @@ def main() -> None:
         ss["letter_version"] += 1
         ss["_last_letter"] = ss["generated_letter"]
 
+    # letter_instant is a one-shot: a fresh generation sets it False so THIS
+    # render animates; every other render (refresh, hall delete, reopen) is
+    # instant. Capture it for this render, then reset to True so subsequent
+    # reruns of an already-shown letter don't re-trigger the typewriter.
+    render_instant = ss.get("letter_instant", True)
+
     html = _build_iframe_html(
         state={
             "view":              ss["view"],
@@ -868,9 +1058,11 @@ def main() -> None:
             "api_error":         ss["api_error"],
             "letter_version":    ss["letter_version"],
             "user_age":          ss.get("user_age"),
+            "letter_instant":    render_instant,
         },
         assets=assets,
     )
+    ss["letter_instant"] = True
 
     # Use the registered custom component (pmb_component) instead of
     # streamlit.components.v1.html — the latter is render-only and silently
@@ -897,4 +1089,8 @@ def main() -> None:
                 st.rerun()
 
 
-main()
+# Streamlit runs this script as the "__main__" module, so the app still boots
+# normally. The guard lets the pure helpers (build_form_from_saved, etc.) be
+# imported in tests without kicking off a full render.
+if __name__ == "__main__":
+    main()
